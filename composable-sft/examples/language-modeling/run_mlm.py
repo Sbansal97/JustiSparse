@@ -130,7 +130,7 @@ class DataTrainingArguments:
     dataset_config_name: Optional[str] = field(
         default=None, metadata={"help": "The configuration name of the dataset to use (via the datasets library)."}
     )
-    train_file: Optional[str] = field(default=None, metadata={"help": "The input training data file (a text file)."})
+    train_file: Optional[str] = field(default=None, metadata={"help": "The input training data file (a text file)."}),
     validation_file: Optional[str] = field(
         default=None,
         metadata={"help": "An optional input evaluation data file to evaluate the perplexity on (a text file)."},
@@ -183,6 +183,12 @@ class DataTrainingArguments:
             "value if set."
         },
     )
+    dropout_debias: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to apply increased dropout regularization or not. Defaults to `True`."
+        },
+    )
     counterfactual_augmentation: Optional[str] = field(
         default=None,
         metadata={
@@ -220,12 +226,12 @@ def main():
         model_args, data_args, sft_args, training_args = parser.parse_args_into_dataclasses()
     #if training_args.per_device_train_batch_size != 42:
     #    raise ValueError("Batch size must be 42!!!")
-
+    log_file = os.path.join(training_args.output_dir, 'training.log')
     # Setup logging
     logging.basicConfig(
         format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
         datefmt="%m/%d/%Y %H:%M:%S",
-        handlers=[logging.StreamHandler(sys.stdout)],
+        handlers=[logging.StreamHandler(sys.stdout)]
     )
 
     log_level = training_args.get_process_log_level()
@@ -338,6 +344,20 @@ def main():
         if model_args.config_overrides is not None:
             logger.info(f"Overriding config: {model_args.config_overrides}")
             config.update_from_string(model_args.config_overrides)
+
+    # Apply increased dropout regularized for debiasing if specified.
+    # We use the hyperparameters specified in: https://arxiv.org/abs/2010.06032.
+    if data_args.dropout_debias:
+        logger.info(
+            f"Setting dropout hyperparameters for: {model_args.model_name_or_path}."
+        )
+
+        if config.model_type in ["bert", "roberta"]:
+            config.hidden_dropout_prob = 0.20
+            config.attention_probs_dropout_prob = 0.15
+        else:
+            config.hidden_dropout_prob = 0.05
+            config.attention_probs_dropout_prob = 0.05
 
     tokenizer_kwargs = {
         "cache_dir": model_args.cache_dir,

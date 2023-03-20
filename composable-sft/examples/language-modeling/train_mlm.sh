@@ -2,17 +2,19 @@
 DEBIAS=cda
 AXIS=gender
 
-python run_mlm.py \
+CUDA_VISIBLE_DEVICES=1,2 nohup python run_mlm.py \
   --model_name_or_path bert-base-uncased \
   --train_file ../../corpora/${DEBIAS}/wikipedia-10.txt \
   --output_dir ../../models/${DEBIAS}/${AXIS} \
   --do_train \
   --do_eval \
-  --per_device_train_batch_size 4 \
-  --per_device_eval_batch_size 4 \
-  --gradient_accumulation_steps 2 \
-  --max_seq_length 256 \
-  --save_steps 10000000 \
+  --log_level 'info' \
+  --preprocessing_num_workers 4 \
+  --per_device_train_batch_size 32 \
+  --per_device_eval_batch_size 32 \
+  --gradient_accumulation_steps 8 \
+  --max_seq_length 512 \
+  --save_steps 500 \
   --overwrite_output_dir \
   --freeze_layer_norm \
   --freeze_decoder \
@@ -20,14 +22,10 @@ python run_mlm.py \
   --sparse_l1_reg 0.1 \
   --counterfactual_augmentation ${AXIS} \
   --learning_rate 5e-5 \
-  --full_ft_min_steps_per_iteration 10000 \
-  --sparse_ft_min_steps_per_iteration 10000 \
-  --full_ft_max_steps_per_iteration 100000 \
-  --sparse_ft_max_steps_per_iteration 100000 \
-  --full_ft_max_epochs_per_iteration 100 \
-  --sparse_ft_max_epochs_per_iteration 100 \
+  --full_ft_min_steps_per_iteration 2000 \
+  --sparse_ft_min_steps_per_iteration 2000 \
+  --full_ft_max_steps_per_iteration 2000 \
+  --sparse_ft_max_steps_per_iteration 2000 \
   --evaluation_strategy steps \
-  --eval_steps 1000 \
-  --validation_split_percentage 5 \
-  --load_best_model_at_end \
-  --save_total_limit 2
+  --eval_steps 500 \
+  --load_best_model_at_end > ../../models/${DEBIAS}/${AXIS}/training.log
