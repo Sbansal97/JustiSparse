@@ -9,12 +9,12 @@ def generate_experiment_id(
 
     # Build the experiment ID.
     if isinstance(model, str):
-        experiment_id += f"_m-{model}"
+        experiment_id += f"-m-{model}"
     if isinstance(model_name_or_path, str):
-        experiment_id += f"_c-{model_name_or_path}"
+        experiment_id += f"-c-{model_name_or_path}"
     if isinstance(bias_type, str):
-        experiment_id += f"_t-{bias_type}"
+        experiment_id += f"-t-{bias_type}"
     if isinstance(seed, int):
-        experiment_id += f"_s-{seed}"
+        experiment_id += f"-s-{seed}"
 
     return experiment_id

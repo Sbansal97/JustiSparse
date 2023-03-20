@@ -131,6 +131,7 @@ if __name__ == "__main__":
         projection_matrix = torch.load(args.projection_matrix)
         kwargs["projection_matrix"] = projection_matrix
 
+    
     model = getattr(models, args.model)(
         args.load_path or args.model_name_or_path, **kwargs
     )
