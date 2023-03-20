@@ -224,9 +224,7 @@ def main():
         model_args, data_args, sft_args, training_args = parser.parse_json_file(json_file=os.path.abspath(sys.argv[1]))
     else:
         model_args, data_args, sft_args, training_args = parser.parse_args_into_dataclasses()
-    #if training_args.per_device_train_batch_size != 42:
-    #    raise ValueError("Batch size must be 42!!!")
-    log_file = os.path.join(training_args.output_dir, 'training.log')
+
     # Setup logging
     logging.basicConfig(
         format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",

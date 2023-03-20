@@ -64,7 +64,6 @@ class LotteryTicketSparseFineTuner(SparseFineTuner):
     def train(self, **kwargs):
         self.freeze()
         result = None
-        
         for it in range(self.sft_args.n_ft_iterations):
             logger.info(f'Fine-tuning iteration {it+1}')
             with torch.no_grad():
@@ -82,6 +81,9 @@ class LotteryTicketSparseFineTuner(SparseFineTuner):
                 self.sft_args.full_ft_max_epochs_per_iteration,
             )
             super().train(**kwargs)
+            self.save_model()
+            self.args.output_dir = os.path.join(self.args.output_dir, 'sft')
+            os.makedirs(self.args.output_dir, exist_ok=True)
             
             self.unfreeze_k_most_changed_params(
                 self.n_tunable_params // self.sft_args.n_ft_iterations
