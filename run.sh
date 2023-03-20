@@ -1,6 +1,10 @@
 MODEL_CLASS=BertForMaskedLM
 MODEL_NAME_OR_PATH=bert-base-uncased
-BIAS_TYPE=gender
+
+MODEL_CLASS=GPT2LMHeadModel
+MODEL_NAME_OR_PATH=gpt2
+
+BIAS_TYPE=gender # "gender", "race", "religion"
 
 # ======================================================================================================
 
@@ -16,14 +20,19 @@ BIAS_TYPE=gender
 
 # ======================================================================================================
 
-# CrowS (Without Debias)
-python bias-bench/experiments/crows.py \
-    --bias_type $BIAS_TYPE \
-    --model $MODEL_CLASS \
-    --model_name_or_path $MODEL_NAME_OR_PATH
+# # CrowS (Without Debias)
+# python bias-bench/experiments/crows.py \
+#     --bias_type $BIAS_TYPE \
+#     --model $MODEL_CLASS \
+#     --model_name_or_path $MODEL_NAME_OR_PATH
 
+# ======================================================================================================
 
     
 
-
-#python bias-bench/experiments/perplexity.py --model_name_or_path bert-base-uncased
+# Perplexity (Without Debias)
+python bias-bench/experiments/perplexity.py \
+    --bias_type $BIAS_TYPE \
+    --model $MODEL_CLASS \
+    --model_name_or_path $MODEL_NAME_OR_PATH \
+    --output_dir eval_results
