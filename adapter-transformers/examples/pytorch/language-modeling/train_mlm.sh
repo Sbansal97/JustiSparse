@@ -4,8 +4,8 @@ AXIS=$2
 
 nohup python run_mlm.py \
   --model_name_or_path bert-base-uncased \
-  --train_file ../../corpora/${DEBIAS}/wikipedia-10.txt \
-  --output_dir ../../models/${DEBIAS}/${AXIS} \
+  --train_file ../../../corpora/${DEBIAS}/wikipedia-10.txt \
+  --output_dir ../../../models/${DEBIAS}/${AXIS} \
   --do_train \
   --do_eval \
   --log_level 'info' \
@@ -16,9 +16,11 @@ nohup python run_mlm.py \
   --max_seq_length 512 \
   --save_steps 500 \
   --overwrite_output_dir \
-  --counterfactual_augmentation ${AXIS} \
   --learning_rate 5e-5 \
-  --max_steps 2000 \
   --evaluation_strategy steps \
+  --max_steps 2000 \
   --eval_steps 500 \
-  --load_best_model_at_end > ../../models/${DEBIAS}/${AXIS}/training.log
+  --train_adapter \
+  --adapter_config "pfeiffer" \
+  --adapter_reduction_factor 48 \
+  --load_best_model_at_end > ../../../models/${DEBIAS}/${AXIS}/training.log

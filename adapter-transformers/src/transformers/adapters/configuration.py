@@ -277,7 +277,7 @@ class PfeifferConfig(AdapterConfig):
     mh_adapter: bool = False
     output_adapter: bool = True
     non_linearity: str = "relu"
-    reduction_factor: Union[float, Mapping] = 16
+    reduction_factor: Union[float, Mapping] = 48
 
 
 @dataclass(eq=False)

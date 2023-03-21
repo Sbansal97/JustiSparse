@@ -33,6 +33,7 @@ from functools import partial
 import datasets
 from datasets import load_dataset
 
+import random
 import evaluate
 import transformers
 from transformers import (
@@ -53,6 +54,7 @@ from transformers.trainer_utils import get_last_checkpoint
 from transformers.utils import check_min_version
 from transformers.utils.versions import require_version
 
+import json
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
 check_min_version("4.26.0")
@@ -212,8 +214,16 @@ class DataTrainingArguments:
         },
     )
     persistent_dir: str = field(
-        default='../../corpora/',
+        default='../../../corpora/',
         metadata={"help": "Directory where all persistent data will be stored."},
+    )
+    adapter_reduction_factor: Optional[int] = field(
+        default=16,
+        metadata={
+            "help": (
+                "Reduction factor for adapter"
+            )
+        },
     )
 
     def __post_init__(self):
