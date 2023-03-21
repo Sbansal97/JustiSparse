@@ -1,8 +1,8 @@
 #!/bin/bash
-DEBIAS=cda
-AXIS=gender
+DEBIAS=$1
+AXIS=$2
 
-CUDA_VISIBLE_DEVICES=1,2 nohup python run_mlm.py \
+nohup python run_mlm.py \
   --model_name_or_path bert-base-uncased \
   --train_file ../../corpora/${DEBIAS}/wikipedia-10.txt \
   --output_dir ../../models/${DEBIAS}/${AXIS} \
