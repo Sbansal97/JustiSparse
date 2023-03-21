@@ -1,6 +1,6 @@
 #!/bin/bash
-DEBIAS=cda
-AXIS=$1
+DEBIAS=$1
+AXIS=$2
 
 nohup python run_mlm.py \
   --model_name_or_path bert-base-uncased \
