@@ -12,7 +12,7 @@ nohup python run_mlm.py \
   --preprocessing_num_workers 4 \
   --per_device_train_batch_size 32 \
   --per_device_eval_batch_size 32 \
-  --gradient_accumulation_steps 8 \
+  --gradient_accumulation_steps 16 \
   --max_seq_length 512 \
   --save_steps 500 \
   --overwrite_output_dir \
@@ -21,6 +21,7 @@ nohup python run_mlm.py \
   --max_steps 2000 \
   --eval_steps 500 \
   --train_adapter \
+  --counterfactual_augmentation ${AXIS} \
   --adapter_config "pfeiffer" \
   --adapter_reduction_factor 48 \
   --load_best_model_at_end > ../../../models/${DEBIAS}/${AXIS}/training.log
