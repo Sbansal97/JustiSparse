@@ -1,11 +1,13 @@
 #!/bin/bash
 DEBIAS=$1
 AXIS=$2
+DATASET=$3
 
 nohup python run_mlm.py \
   --model_name_or_path bert-base-uncased \
-  --train_file ../../corpora/${DEBIAS}/wikipedia-10.txt \
-  --output_dir ../../models/${DEBIAS}/${AXIS} \
+  --train_file ../../corpora/${DEBIAS}/${DATASET}_train.txt \
+  --validation_file ../../corpora/${DEBIAS}/${DATASET}_validation.txt \
+  --output_dir ../../models/${DEBIAS}/${DATASET}/${AXIS} \
   --do_train \
   --do_eval \
   --log_level 'info' \
@@ -22,10 +24,11 @@ nohup python run_mlm.py \
   --sparse_l1_reg 0.1 \
   --counterfactual_augmentation ${AXIS} \
   --learning_rate 5e-5 \
-  --full_ft_min_steps_per_iteration 2000 \
-  --sparse_ft_min_steps_per_iteration 2000 \
-  --full_ft_max_steps_per_iteration 2000 \
-  --sparse_ft_max_steps_per_iteration 2000 \
+  --full_ft_min_steps_per_iteration 10000 \
+  --sparse_ft_min_steps_per_iteration 10000 \
+  --full_ft_max_steps_per_iteration 10000 \
+  --sparse_ft_max_steps_per_iteration 10000 \
   --evaluation_strategy steps \
   --eval_steps 500 \
-  --load_best_model_at_end > ../../models/${DEBIAS}/${AXIS}/training.log
+  --patience 3 \
+  --load_best_model_at_end > ../../models/${DEBIAS}/${DATASET}/${AXIS}/training.log
