@@ -118,7 +118,6 @@ if __name__ == "__main__":
     model = getattr(models, args.model)(
         args.load_path or args.model_name_or_path, **kwargs
     )
-
     if _is_self_debias(args.model):
         model._model.eval()
     else:
