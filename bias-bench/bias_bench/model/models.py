@@ -3,8 +3,8 @@ from functools import partial
 import torch
 import transformers
 
-from bias_bench.debias.self_debias.modeling import GPT2Wrapper
-from bias_bench.debias.self_debias.modeling import MaskedLMWrapper
+# from bias_bench.debias.self_debias.modeling import GPT2Wrapper
+# from bias_bench.debias.self_debias.modeling import MaskedLMWrapper
 
 
 class BertModel:
@@ -490,25 +490,25 @@ class DropoutGPT2ForSequenceClassification:
         return model
 
 
-class SelfDebiasBertForMaskedLM:
-    def __new__(self, model_name_or_path):
-        model = MaskedLMWrapper(model_name_or_path)
-        return model
+# class SelfDebiasBertForMaskedLM:
+#     def __new__(self, model_name_or_path):
+#         model = MaskedLMWrapper(model_name_or_path)
+#         return model
 
 
-class SelfDebiasAlbertForMaskedLM:
-    def __new__(self, model_name_or_path):
-        model = MaskedLMWrapper(model_name_or_path)
-        return model
+# class SelfDebiasAlbertForMaskedLM:
+#     def __new__(self, model_name_or_path):
+#         model = MaskedLMWrapper(model_name_or_path)
+#         return model
 
 
-class SelfDebiasRobertaForMaskedLM:
-    def __new__(self, model_name_or_path):
-        model = MaskedLMWrapper(model_name_or_path)
-        return model
+# class SelfDebiasRobertaForMaskedLM:
+#     def __new__(self, model_name_or_path):
+#         model = MaskedLMWrapper(model_name_or_path)
+#         return model
 
 
-class SelfDebiasGPT2LMHeadModel:
-    def __new__(self, model_name_or_path):
-        model = GPT2Wrapper(model_name_or_path, use_cuda=False)
-        return model
+# class SelfDebiasGPT2LMHeadModel:
+#     def __new__(self, model_name_or_path):
+#         model = GPT2Wrapper(model_name_or_path, use_cuda=False)
+#         return model

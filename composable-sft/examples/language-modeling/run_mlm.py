@@ -183,6 +183,12 @@ class DataTrainingArguments:
             "value if set."
         },
     )
+    patience: Optional[int] = field(
+        default=1,
+        metadata={
+            "help": "Patience for early stopping"
+        },
+    )
     dropout_debias: bool = field(
         default=False,
         metadata={
@@ -730,6 +736,7 @@ def main():
         eval_dataset=eval_dataset if training_args.do_eval else None,
         tokenizer=tokenizer,
         data_collator=data_collator,
+        callbacks=[EarlyStoppingCallback(early_stopping_patience=data_args.patience)]
     )
 
     # Training

@@ -58,6 +58,12 @@ parser.add_argument(
     "model is instantiated.",
 )
 parser.add_argument(
+    "--adapter_path",    
+    type=str,
+    default=None,
+    help="adapter path for adapter bias model",
+)
+parser.add_argument(
     "--bias_direction",
     action="store",
     type=str,
@@ -118,7 +124,10 @@ if __name__ == "__main__":
     model = getattr(models, args.model)(
         args.load_path or args.model_name_or_path, **kwargs
     )
-
+    if args.adapter_path:
+        model.load_adapter(args.adapter_path)        
+        model.set_active_adapters("mlm")                          
+                          
     if _is_self_debias(args.model):
         model._model.eval()
     else:
