@@ -44,6 +44,7 @@ class SparseFineTuner(Trainer):
         *args,
         sft_args=None,
         maskable_params=None,
+        evaluate_with_diffs=False,
         **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -103,6 +104,22 @@ class SparseFineTuner(Trainer):
         }
         # Whether to apply masking during training.
         self._masking_enabled = True
+
+        self.evaluate_with_diffs = evaluate_with_diffs
+        self.diffs = None
+        self.sft = None
+
+    def set_diffs(self, diffs):
+        self.diffs = diffs
+        self.sft = SFT()
+        self.sft.diffs = self.diffs
+
+    def set_mask(self, mask):
+        _mask = {}
+        for k,v in mask.items():
+            if k in self.maskable_params:
+                _mask[k] = v
+        self._mask = _mask        
 
     def enable_masking(self):
         self._masking_enabled = True
@@ -197,7 +214,7 @@ class SparseFineTuner(Trainer):
         if self._masking_enabled:
             # set gradients for non-trainable parametres to zero.
             for n, p in self.model.named_parameters():
-                if n in self.maskable_params and p.grad is not None:
+                if n in self.maskable_params and p.grad is not None and n in self._mask:
                     p.grad *= self._mask[n]
         return loss
 
@@ -219,14 +236,29 @@ class SparseFineTuner(Trainer):
             self._globalstep_last_logged = self.state.global_step
             self.store_flos()
 
-            self.log(logs)
-
+            self.log(logs)  
+        
         metrics = None
         if self.control.should_evaluate:
-            metrics = self.evaluate(ignore_keys=ignore_keys_for_eval)
-            self._report_to_hp_search(trial, epoch, metrics)
-
+            if self.evaluate_with_diffs:
+                model_sd_copy = {k:v.clone() for k,v in self.model.state_dict().items()}
+                self.sft.apply(self.model, with_abs=False)
+                metrics = self.evaluate(ignore_keys=ignore_keys_for_eval)
+                self._report_to_hp_search(trial, epoch, metrics)
+                self.model.load_state_dict(model_sd_copy)
+            else:
+                metrics = self.evaluate(ignore_keys=ignore_keys_for_eval)
+                self._report_to_hp_search(trial, epoch, metrics)
+        
         if self.control.should_save:
-            self._save_checkpoint(model, trial, metrics=metrics)
-            self.control = self.callback_handler.on_save(self.args, self.state, self.control)
+            if self.evaluate_with_diffs:
+                model_sd_copy = {k:v.clone() for k,v in self.model.state_dict().items()}
+                self.sft.apply(self.model, with_abs=False)
+            
+                self._save_checkpoint(self.model, trial, metrics=metrics)
+                self.control = self.callback_handler.on_save(self.args, self.state, self.control)
 
+                self.model.load_state_dict(model_sd_copy)
+            else:
+                self._save_checkpoint(self.model, trial, metrics=metrics)
+                self.control = self.callback_handler.on_save(self.args, self.state, self.control)
