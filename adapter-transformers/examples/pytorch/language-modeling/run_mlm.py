@@ -217,14 +217,6 @@ class DataTrainingArguments:
         default='../../../corpora/',
         metadata={"help": "Directory where all persistent data will be stored."},
     )
-    adapter_reduction_factor: Optional[int] = field(
-        default=16,
-        metadata={
-            "help": (
-                "Reduction factor for adapter"
-            )
-        },
-    )
 
     def __post_init__(self):
         if self.dataset_name is None and self.train_file is None and self.validation_file is None:

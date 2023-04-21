@@ -25,9 +25,9 @@ nohup python run_mlm.py \
   --counterfactual_augmentation ${AXIS} \
   --learning_rate 5e-5 \
   --full_ft_min_steps_per_iteration 10000 \
-  --sparse_ft_min_steps_per_iteration 10000 \
+  --sparse_ft_min_steps_per_iteration 30000 \
   --full_ft_max_steps_per_iteration 10000 \
-  --sparse_ft_max_steps_per_iteration 10000 \
+  --sparse_ft_max_steps_per_iteration 30000 \
   --evaluation_strategy steps \
   --eval_steps 500 \
   --patience 3 \

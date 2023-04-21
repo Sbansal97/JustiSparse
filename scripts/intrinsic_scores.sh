@@ -4,7 +4,7 @@ SETTING=$1 # "orig", "CDA", ""
 BIAS_TYPE=$2 # "gender", "race", "religion"
 METRIC=$3 # "stereo", "crows", "perplexity"
 
-CHECKPOINTS=/projects/tir6/general/srijanb/Spr23/JustiSparse/checkpoints/sft-ckpts/checkpoint-$4
+CHECKPOINTS=/projects/tir6/general/srijanb/Spr23/JustiSparse/checkpoints/sft-ckpts/
 
 if [[ "$METRIC" = "stereo" && "$SETTING" = "orig" ]]; then
     MODEL_CLASS=BertForMaskedLM
@@ -63,8 +63,14 @@ elif [[ "$METRIC" = "crows" && "$SETTING" = "CDA" ]]; then
     python bias-bench/experiments/crows_debias.py \
         --bias_type $BIAS_TYPE \
         --model $MODEL_CLASS \
-        --load_path $CHECKPOINTS
+        --model_name_or_path $MODEL_NAME_OR_PATH \
+        --adapter_path /projects/tir6/general/srijanb/Spr23/JustiSparse/adapter-transformers/models/cda/mlm
+        --adapter_path /projects/tir6/general/srijanb/Spr23/JustiSparse/adapter-transformers/models/cda/mlm
 
+
+
+
+    # --load_path $CHECKPOINTS \
     #--load_path $CHECKPOINTS/cda_c-bert-base-uncased_t-"$BIAS_TYPE"_s-0/        
 
 elif [[ "$METRIC" = "crows" && "$SETTING" = "CDA_SFT" ]]; then

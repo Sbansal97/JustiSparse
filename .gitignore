@@ -2,3 +2,5 @@ composable-sft/corpora
 composable-sft/models
 adapter-transformers/corpora
 adapter-transformers/models
+adapter-transformers/models_prefix
+corpora/
