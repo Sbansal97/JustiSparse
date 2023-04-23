@@ -65,6 +65,10 @@ elif [[ "$METRIC" = "crows" && "$SETTING" = "CDA" ]]; then
         --model $MODEL_CLASS \
         --model_name_or_path $MODEL_NAME_OR_PATH \
         --adapter_path /projects/tir6/general/srijanb/Spr23/JustiSparse/adapter-transformers/models/cda/mlm
+
+
+
+
     # --load_path $CHECKPOINTS \
     #--load_path $CHECKPOINTS/cda_c-bert-base-uncased_t-"$BIAS_TYPE"_s-0/        
 

@@ -594,20 +594,27 @@ class UniPELTConfig(ConfigUnion):
         super().__init__(*[c.replace(use_gating=True) for c in components])
 
 
+
 # IMPORTANT: When adding a new config here, also add it to adapter_docs/overview.md!
+
+# import sys
+# sys.path.append('/usr1/datasets/sumita/comp-ethics/project/JustiSparse')
+# from peft_config import ADAPTER_CONFIG_MAP
+
+
 ADAPTER_CONFIG_MAP = {
-    "pfeiffer": PfeifferConfig(),
-    "houlsby": HoulsbyConfig(),
-    "parallel": ParallelConfig(),
-    "scaled_parallel": ParallelConfig(scaling="learned"),
-    "pfeiffer+inv": PfeifferInvConfig(),
+    "pfeiffer": PfeifferConfig(reduction_factor=32),                          # 1074522
+    "houlsby": HoulsbyConfig(reduction_factor=64),                            # 1083738
+    "parallel": ParallelConfig(reduction_factor=32),                          # 1074522
+    "scaled_parallel": ParallelConfig(scaling="learned",reduction_factor=32), # 1074534
+    "pfeiffer+inv": PfeifferInvConfig(inv_adapter_reduction_factor=4),        # 1075386
     "houlsby+inv": HoulsbyInvConfig(),
-    "compacter++": CompacterPlusPlusConfig(),
-    "compacter": CompacterConfig(),
+    "compacter++": CompacterPlusPlusConfig(),             
+    "compacter": CompacterConfig(reduction_factor=1),                         # 733306
     "prefix_tuning": PrefixTuningConfig(),
-    "prefix_tuning_flat": PrefixTuningConfig(flat=True),
-    "lora": LoRAConfig(),
-    "ia3": IA3Config(),
+    "prefix_tuning_flat": PrefixTuningConfig(flat=True, prefix_length = 24),  # 1065018
+    "lora": LoRAConfig(),                                                     # 917562
+    "ia3": IA3Config(),                                                       # 677946
     "mam": MAMConfig(),
     "unipelt": UniPELTConfig(),
 }

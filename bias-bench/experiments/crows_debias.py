@@ -64,6 +64,12 @@ parser.add_argument(
     help="adapter path for adapter bias model",
 )
 parser.add_argument(
+    "--adapter_config",    
+    type=str,
+    default=None,
+    help="adapter path for adapter bias model",
+)
+parser.add_argument(
     "--bias_direction",
     action="store",
     type=str,
@@ -125,7 +131,11 @@ if __name__ == "__main__":
         args.load_path or args.model_name_or_path, **kwargs
     )
     if args.adapter_path:
+<<<<<<< HEAD
+        model.load_adapter(args.adapter_path, config=args.adapter_config)
+=======
         model.load_adapter(args.adapter_path)        
+>>>>>>> b0be005274989fd940c5691dc5d5070f0a79a9f4
         model.set_active_adapters("mlm")                          
                           
     if _is_self_debias(args.model):
@@ -145,6 +155,10 @@ if __name__ == "__main__":
     )
     results = runner()
     print(f"Metric: {results}")
+
+    
+    with open('peft_cda_bios_bias_mlm.txt','a+') as f:
+        f.write(f'{args.adapter_config}\t{args.adapter_path}\t{results}\n')
 
     os.makedirs(f"{args.persistent_dir}/results/crows", exist_ok=True)
     with open(f"{args.persistent_dir}/results/crows/{experiment_id}.json", "w") as f:
