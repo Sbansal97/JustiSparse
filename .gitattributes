@@ -1,3 +1,0 @@
-data/gab/test.json filter=lfs diff=lfs merge=lfs -text
-data/gab/train.json filter=lfs diff=lfs merge=lfs -text
-data/gab/validation.json filter=lfs diff=lfs merge=lfs -text
