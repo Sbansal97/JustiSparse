@@ -521,14 +521,14 @@ def main():
         # To speed up this part, we use multiprocessing. See the documentation of the map method for more information:
         # https://huggingface.co/docs/datasets/package_reference/main_classes.html#datasets.Dataset.map
 
-        with training_args.main_process_first(desc="grouping texts together"):
-            tokenized_datasets = tokenized_datasets.map(
-                group_texts,
-                batched=True,
-                num_proc=data_args.preprocessing_num_workers,
-                load_from_cache_file=not data_args.overwrite_cache,
-                desc=f"Grouping texts in chunks of {max_seq_length}",
-            )
+        # with training_args.main_process_first(desc="grouping texts together"):
+        #     tokenized_datasets = tokenized_datasets.map(
+        #         group_texts,
+        #         batched=True,
+        #         num_proc=data_args.preprocessing_num_workers,
+        #         load_from_cache_file=not data_args.overwrite_cache,
+        #         desc=f"Grouping texts in chunks of {max_seq_length}",
+        #     )
     
     def _create_bias_attribute_words(attribute_file, bias_type):
         """Creates list of bias attribute words (e.g., he/she).

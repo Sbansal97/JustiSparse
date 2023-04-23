@@ -8,11 +8,23 @@ import torch
 from tqdm import tqdm
 
 from transformers import Trainer, TrainerCallback
+from transformers.utils import is_sagemaker_mp_enabled, ExplicitEnum
 
 from .sft import SFT
 from .sft_args import SftArguments
+from .reg_args import RegArguments
 
 logger = logging.getLogger(__name__)
+
+from transformers.trainer_pt_utils import get_parameter_names
+from transformers.pytorch_utils import ALL_LAYERNORM_LAYERS
+
+class ShardedDDPOption(ExplicitEnum):
+    SIMPLE = "simple"
+    ZERO_DP_2 = "zero_dp_2"
+    ZERO_DP_3 = "zero_dp_3"
+    OFFLOAD = "offload"
+    AUTO_WRAP = "auto_wrap"
 
 
 class _RegLossCalculationCallback(TrainerCallback):
@@ -43,8 +55,8 @@ class SparseFineTuner(Trainer):
         self,
         *args,
         sft_args=None,
+        reg_args=None,
         maskable_params=None,
-        evaluate_with_diffs=False,
         **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -54,6 +66,12 @@ class SparseFineTuner(Trainer):
             self.sft_args = SftArguments()
         else:
             self.sft_args = sft_args
+
+        if reg_args is None:
+            self.reg_args = RegArguments()
+        else:
+            self.reg_args = reg_args
+
         if maskable_params is None:
             self.maskable_params = set(
                 n for n, _ in self.model.named_parameters()
@@ -104,22 +122,6 @@ class SparseFineTuner(Trainer):
         }
         # Whether to apply masking during training.
         self._masking_enabled = True
-
-        self.evaluate_with_diffs = evaluate_with_diffs
-        self.diffs = None
-        self.sft = None
-
-    def set_diffs(self, diffs):
-        self.diffs = diffs
-        self.sft = SFT()
-        self.sft.diffs = self.diffs
-
-    def set_mask(self, mask):
-        _mask = {}
-        for k,v in mask.items():
-            if k in self.maskable_params:
-                _mask[k] = v
-        self._mask = _mask        
 
     def enable_masking(self):
         self._masking_enabled = True
@@ -214,7 +216,7 @@ class SparseFineTuner(Trainer):
         if self._masking_enabled:
             # set gradients for non-trainable parametres to zero.
             for n, p in self.model.named_parameters():
-                if n in self.maskable_params and p.grad is not None and n in self._mask:
+                if n in self.maskable_params and p.grad is not None:
                     p.grad *= self._mask[n]
         return loss
 
@@ -236,29 +238,82 @@ class SparseFineTuner(Trainer):
             self._globalstep_last_logged = self.state.global_step
             self.store_flos()
 
-            self.log(logs)  
-        
+            self.log(logs)
+
         metrics = None
         if self.control.should_evaluate:
-            if self.evaluate_with_diffs:
-                model_sd_copy = {k:v.clone() for k,v in self.model.state_dict().items()}
-                self.sft.apply(self.model, with_abs=False)
-                metrics = self.evaluate(ignore_keys=ignore_keys_for_eval)
-                self._report_to_hp_search(trial, epoch, metrics)
-                self.model.load_state_dict(model_sd_copy)
-            else:
-                metrics = self.evaluate(ignore_keys=ignore_keys_for_eval)
-                self._report_to_hp_search(trial, epoch, metrics)
-        
-        if self.control.should_save:
-            if self.evaluate_with_diffs:
-                model_sd_copy = {k:v.clone() for k,v in self.model.state_dict().items()}
-                self.sft.apply(self.model, with_abs=False)
-            
-                self._save_checkpoint(self.model, trial, metrics=metrics)
-                self.control = self.callback_handler.on_save(self.args, self.state, self.control)
+            metrics = self.evaluate(ignore_keys=ignore_keys_for_eval)
+            self._report_to_hp_search(trial, epoch, metrics)
 
-                self.model.load_state_dict(model_sd_copy)
+        if self.control.should_save:
+            self._save_checkpoint(model, trial, metrics=metrics)
+            self.control = self.callback_handler.on_save(self.args, self.state, self.control)
+
+
+    def create_optimizer(self):
+        """
+        Setup the optimizer.
+        We provide a reasonable default that works well. If you want to use something else, you can pass a tuple in the
+        Trainer's init through `optimizers`, or subclass and override this method in a subclass.
+        """
+        opt_model = self.model_wrapped if is_sagemaker_mp_enabled() else self.model
+
+        adv_parameters =[(n,p) for n,p in self.model.named_parameters() if any(x in n for x in ['adv_'])]
+        adv_parameters_names = [n for n,p in self.model.named_parameters() if any(x in n for x in ['adv_'])]
+
+        if adv_parameters:
+            logger.info('Parameters for adversarial learning {}'.format([x[0] for x in adv_parameters]))
+
+        if self.optimizer is None:
+            decay_parameters = get_parameter_names(opt_model, ALL_LAYERNORM_LAYERS)
+            decay_parameters = [name for name in decay_parameters if "bias" not in name]
+            optimizer_grouped_parameters = [
+                {
+                    "params": [
+                        p for n, p in opt_model.named_parameters() if (n in decay_parameters and p.requires_grad and n not in adv_parameters_names)
+                    ],
+                    "weight_decay": self.args.weight_decay,
+                },
+                {
+                    "params": [
+                        p for n, p in opt_model.named_parameters() if (n not in decay_parameters and p.requires_grad and n not in adv_parameters_names)
+                    ],
+                    "weight_decay": 0.0,
+                },
+            ]
+                        
+            if adv_parameters:
+                optimizer_grouped_parameters.append({
+                    'params': [p for n, p in adv_parameters],
+                    'initial_lr': self.args.learning_rate * self.reg_args.adv_lr_scale
+                })
+
+            optimizer_cls, optimizer_kwargs = Trainer.get_optimizer_cls_and_kwargs(self.args)
+
+            if self.sharded_ddp == ShardedDDPOption.SIMPLE:
+                self.optimizer = OSS(
+                    params=optimizer_grouped_parameters,
+                    optim=optimizer_cls,
+                    **optimizer_kwargs,
+                )
             else:
-                self._save_checkpoint(self.model, trial, metrics=metrics)
-                self.control = self.callback_handler.on_save(self.args, self.state, self.control)
+                self.optimizer = optimizer_cls(optimizer_grouped_parameters, **optimizer_kwargs)
+                if optimizer_cls.__name__ == "Adam8bit":
+                    import bitsandbytes
+
+                    manager = bitsandbytes.optim.GlobalOptimManager.get_instance()
+
+                    skipped = 0
+                    for module in opt_model.modules():
+                        if isinstance(module, nn.Embedding):
+                            skipped += sum({p.data_ptr(): p.numel() for p in module.parameters()}.values())
+                            print(f"skipped {module}: {skipped/2**20}M params")
+                            manager.register_module_override(module, "weight", {"optim_bits": 32})
+                            logger.debug(f"bitsandbytes: will optimize {module} in fp32")
+                    print(f"skipped: {skipped/2**20}M params")
+
+        if is_sagemaker_mp_enabled():
+            self.optimizer = smp.DistributedOptimizer(self.optimizer)
+
+        return self.optimizer
+

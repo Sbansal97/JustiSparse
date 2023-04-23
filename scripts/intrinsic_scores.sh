@@ -65,6 +65,7 @@ elif [[ "$METRIC" = "crows" && "$SETTING" = "CDA" ]]; then
         --model $MODEL_CLASS \
         --model_name_or_path $MODEL_NAME_OR_PATH \
         --adapter_path /projects/tir6/general/srijanb/Spr23/JustiSparse/adapter-transformers/models/cda/mlm
+        --adapter_path /projects/tir6/general/srijanb/Spr23/JustiSparse/adapter-transformers/models/cda/mlm
 
 
 

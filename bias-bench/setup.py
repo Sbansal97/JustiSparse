@@ -10,7 +10,7 @@ setup(
         "scipy==1.7.3",
         "scikit-learn==1.0.2",
         "nltk==3.7.0",
-        "datasets==1.18.3"
+        "datasets==2.11.0"
     ],
     include_package_data=True,
     zip_safe=False,

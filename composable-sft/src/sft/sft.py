@@ -178,3 +178,4 @@ class SFT:
                     diff = diff.to(tensor.device)
                     self.diffs[name] = diff
                 tensor -= diff
+
