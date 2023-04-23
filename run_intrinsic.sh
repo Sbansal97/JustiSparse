@@ -9,7 +9,14 @@ train_path=data/${DATASET}/train.jsonl
 val_path=data/${DATASET}/validation.jsonl
 export CUDA_VISIBLE_DEVICES=$GPU_ID
 
+if [[ $AXIS == "gender" ]];then
+    attr='g'
+elif [[ $AXIS == "group" ]];then
+    attr='t'
+fi
+
 mkdir -p models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET}
+
 
 if [[ $DEBIAS == "cda" ]];then
     if [[ $PEFT == "sft" ]];then
@@ -73,12 +80,11 @@ if [[ $DEBIAS == "cda" ]];then
             --adapter_config ${PEFT} \
             --load_best_model_at_end > models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET}/training.log
     fi
-
 elif [[ $DEBIAS == "adv" ]];then
     if [[ $PEFT == "sft" ]];then
         python run_intrinsic.py \
             --model_name_or_path bert-base-uncased \
-            --protected_attribute_column 'g' \
+            --protected_attribute_column $attr \
             --train_file $train_path \
             --validation_file $val_path \
             --output_dir models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET} \
@@ -112,7 +118,7 @@ elif [[ $DEBIAS == "adv" ]];then
     else
         python run_intrinsic.py \
             --model_name_or_path bert-base-uncased \
-            --protected_attribute_column 'g' \
+            --protected_attribute_column $attr \
             --train_file $train_path \
             --validation_file $val_path \
             --output_dir models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET} \
