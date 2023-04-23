@@ -412,7 +412,8 @@ def main():
             protected_attribute_list = list(set(raw_datasets["validation"][data_args.protected_attribute_column]))
             protected_attribute2id = {l: i for i, l in enumerate(protected_attribute_list)}
 
-    reg_args.adv_attr_dim = len(protected_attribute2id)
+    if reg_args.adv_debias :
+        reg_args.adv_attr_dim = len(protected_attribute2id)
 
     text_column_name = "text" if "text" in column_names else column_names[0]
 
