@@ -10,6 +10,7 @@ class IntrasentenceLoader(object):
         self,
         tokenizer,
         max_seq_length=None,
+        truncation=False,
         pad_to_max_length=False,
         input_file="../../data/bias.json",
         model_name_or_path=None,
@@ -22,6 +23,7 @@ class IntrasentenceLoader(object):
         self._max_seq_length = max_seq_length
         self._pad_to_max_length = pad_to_max_length
         self._model_name_or_path = model_name_or_path
+        self._truncation = truncation
 
         for cluster in clusters:
             for sentence in cluster.sentences:
@@ -64,6 +66,7 @@ class IntrasentenceLoader(object):
         tokens_dict = self._tokenizer.encode_plus(
             text,
             text_pair=text_pair,
+            truncation=self._truncation,
             add_special_tokens=True,
             max_length=self._max_seq_length,
             pad_to_max_length=self._pad_to_max_length,
@@ -81,7 +84,7 @@ class IntrasentenceLoader(object):
             input_ids,
             attention_mask,
             token_type_ids,
-            target_tokens,
+            # target_tokens,
         )
 
 

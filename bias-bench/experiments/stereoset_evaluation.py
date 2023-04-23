@@ -189,15 +189,15 @@ def parse_file(gold_file, predictions_file):
 
     if args.output_file:
         output_file = args.output_file
-    elif args.predictions_dir != None:
-        predictions_dir = args.predictions_dir
-        if predictions_dir[-1] == "/":
-            predictions_dir = predictions_dir[:-1]
-        output_file = f"{predictions_dir}.json"
-    else:
-        output_file = "results.json"
+    # elif args.predictions_dir != None:
+    #     predictions_dir = args.predictions_dir
+    #     if predictions_dir[-1] == "/":
+    #         predictions_dir = predictions_dir[:-1]
+    #     output_file = f"{predictions_dir}.json"
+    # else:
+    #     output_file = "results.json"
 
-    if os.path.exists(output_file):
+    if args.output_file and os.path.exists(output_file):
         with open(output_file, "r") as f:
             d = json.load(f)
     else:
@@ -208,8 +208,9 @@ def parse_file(gold_file, predictions_file):
     experiment_id = os.path.splitext(file_name)[0]
     d[experiment_id] = overall
 
-    with open(output_file, "w+") as f:
-        json.dump(d, f, indent=2)
+    if args.output_file:
+        with open(output_file, "w+") as f:
+            json.dump(d, f, indent=2)
 
 
 def _extract_split_from_file_path(file_path):

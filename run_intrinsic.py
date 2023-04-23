@@ -514,7 +514,13 @@ def main():
         # We use `return_special_tokens_mask=True` because DataCollatorForLanguageModeling (see below) is more
         # efficient when it receives the `special_tokens_mask`.
         def tokenize_function(examples):
-            outputs = tokenizer(examples[text_column_name], return_special_tokens_mask=True)
+            outputs = tokenizer(
+                examples[text_column_name], 
+                return_special_tokens_mask=True, 
+                truncation=True, 
+                padding=True, 
+                max_length=max_seq_length
+            )
             if reg_args.adv_debias:
                 protected_attributes = [protected_attribute2id[i] for i in examples[data_args.protected_attribute_column]]
                 outputs['attr'] = protected_attributes

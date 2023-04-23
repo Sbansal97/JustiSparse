@@ -81,6 +81,6 @@ if __name__ == "__main__":
 
     print(f"Metric: {results}")
 
-    os.makedirs(f"{args.persistent_dir}/results/crows", exist_ok=True)
-    with open(f"{args.persistent_dir}/results/crows/{experiment_id}.json", "w") as f:
-        json.dump(results, f)
+    # os.makedirs(f"{args.persistent_dir}/results/crows", exist_ok=True)
+    # with open(f"{args.persistent_dir}/results/crows/{experiment_id}.json", "w") as f:
+    #     json.dump(results, f)

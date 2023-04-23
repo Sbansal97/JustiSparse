@@ -114,9 +114,9 @@ class StereoSetRunner:
             max_seq_length=self._max_seq_length,
             pad_to_max_length=pad_to_max_length,
             input_file=self._input_file,
+            truncation=True,
             model_name_or_path=self._model_name_or_path,
         )
-
         loader = DataLoader(dataset, batch_size=self._batch_size)
         word_probabilities = defaultdict(list)
 
@@ -126,8 +126,7 @@ class StereoSetRunner:
             next_token,
             input_ids,
             attention_mask,
-            token_type_ids,
-            target_tokens,
+            token_type_ids
         ) in tqdm(loader, total=len(loader)):
             # Start by converting everything to a tensor.
             input_ids = torch.stack(input_ids).to(device).transpose(0, 1)

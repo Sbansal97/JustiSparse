@@ -127,7 +127,7 @@ if __name__ == "__main__":
         kwargs["projection_matrix"] = projection_matrix
 
     # Load model and tokenizer. `load_path` can be used to override `model_name_or_path`.
-d    model = getattr(models, args.model)(
+    model = getattr(models, args.model)(
         args.load_path or args.model_name_or_path, **kwargs
     )
     if args.adapter_path:
