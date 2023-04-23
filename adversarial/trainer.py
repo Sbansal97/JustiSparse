@@ -2,6 +2,7 @@ from transformers.trainer_pt_utils import get_parameter_names
 from transformers.pytorch_utils import ALL_LAYERNORM_LAYERS
 from .reg_args import RegArguments
 from transformers.adapters import AdapterTrainer
+from sft.trainer import LotteryTickerSFTTrainer
 
 class ShardedDDPOption(ExplicitEnum):
     SIMPLE = "simple"
@@ -11,7 +12,7 @@ class ShardedDDPOption(ExplicitEnum):
     AUTO_WRAP = "auto_wrap"
 
 
-class AdvSFTTrainer(SFTTrainer):
+class AdvLotteryTickerSFTTrainer(LotteryTickerSFTTrainer):
     def __init__(self, reg_args, **kwargs):
         super().__init__(**kwargs)
         self.reg_args = reg_args
@@ -101,7 +102,7 @@ class AdvSFTTrainer(SFTTrainer):
         return self.optimizer
 
     
-class AdvSFTTrainer(AdapterTrainer):
+class AdvAdapterTrainer(AdapterTrainer):
     def __init__(self, reg_args, **kwargs):
         super().__init__(**kwargs)
         self.reg_args = reg_args

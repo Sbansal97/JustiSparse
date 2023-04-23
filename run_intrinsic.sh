@@ -135,6 +135,6 @@ elif [[ $DEBIAS == "adv" ]];then
             --adapter_config ${PEFT} \
             --cache_dir $cache_dir \
             --adv_debias \
-            --load_best_model_at_end > models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET}/training.log
+            --load_best_model_at_end #> models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET}/training.log
     fi
 fi

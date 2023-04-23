@@ -12,7 +12,6 @@ from transformers.utils import is_sagemaker_mp_enabled, ExplicitEnum
 
 from .sft import SFT
 from .sft_args import SftArguments
-from adversarial.reg_args import RegArguments
 
 logger = logging.getLogger(__name__)
 

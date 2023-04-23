@@ -53,7 +53,9 @@ from sft import (
 )
 from adversarial import (
     RegArguments,
-    AdvBertForMaskedLM
+    AdvBertForMaskedLM,
+    AdvAdapterTrainer,
+    AdvLotteryTicketSFTTrainer
 )
 
 
@@ -453,8 +455,6 @@ def main():
     if len(tokenizer) > embedding_size:
         model.resize_token_embeddings(len(tokenizer))
 
-    import pdb
-    pdb.set_trace()
     # Preprocessing the datasets.
 
     # First we tokenize all the texts.
@@ -793,33 +793,63 @@ def main():
             n for n, p in model.named_parameters()
             if n.startswith(model.base_model_prefix) and p.requires_grad
         ]
-
         # Initialize our Trainer
-        trainer = LotteryTicketSFTTrainer(
-            sft_args=sft_args,
-            maskable_params=maskable_params,
-            model=model,
-            args=training_args,
-            train_dataset=train_dataset if training_args.do_train else None,
-            eval_dataset=eval_dataset if training_args.do_eval else None,
-            tokenizer=tokenizer,
-            data_collator=data_collator,
-            callbacks=[EarlyStoppingCallback(early_stopping_patience=data_args.patience)]
-        )
+        if reg_args.adv_debias : 
+            trainer = AdvLotteryTicketSFTTrainer(
+                sft_args=sft_args,
+                reg_args=reg_args,
+                maskable_params=maskable_params,
+                model=model,
+                args=training_args,
+                train_dataset=train_dataset if training_args.do_train else None,
+                eval_dataset=eval_dataset if training_args.do_eval else None,
+                tokenizer=tokenizer,
+                data_collator=data_collator,
+                callbacks=[EarlyStoppingCallback(early_stopping_patience=data_args.patience)]
+            )
+        else:
+            trainer = LotteryTicketSFTTrainer(
+                sft_args=sft_args,
+                maskable_params=maskable_params,
+                model=model,
+                args=training_args,
+                train_dataset=train_dataset if training_args.do_train else None,
+                eval_dataset=eval_dataset if training_args.do_eval else None,
+                tokenizer=tokenizer,
+                data_collator=data_collator,
+                callbacks=[EarlyStoppingCallback(early_stopping_patience=data_args.patience)]
+            )
 
     else:
         # Setup adapters
         setup_adapter_training(model, adapter_args, "mlm")
-        trainer_class = AdapterTrainer if adapter_args.train_adapter else Trainer
-        trainer = trainer_class(
-            model=model,
-            args=training_args,
-            train_dataset=train_dataset if training_args.do_train else None,
-            eval_dataset=eval_dataset if training_args.do_eval else None,
-            tokenizer=tokenizer,
-            data_collator=data_collator,
-            callbacks=[EarlyStoppingCallback(early_stopping_patience=data_args.patience)]
-        )
+        trainer_class = Trainer
+        if adapter_args.train_adapter:
+            trainer_class = AdapterTrainer
+            if reg_args.adv_debias:
+                trainer_class = AdvAdapterTrainer
+
+        if reg_args.adv_debias:
+            trainer = trainer_class(
+                model=model,
+                args=training_args,
+                reg_args=reg_args,
+                train_dataset=train_dataset if training_args.do_train else None,
+                eval_dataset=eval_dataset if training_args.do_eval else None,
+                tokenizer=tokenizer,
+                data_collator=data_collator,
+                callbacks=[EarlyStoppingCallback(early_stopping_patience=data_args.patience)]
+            )
+        else:
+            trainer = trainer_class(
+                model=model,
+                args=training_args,
+                train_dataset=train_dataset if training_args.do_train else None,
+                eval_dataset=eval_dataset if training_args.do_eval else None,
+                tokenizer=tokenizer,
+                data_collator=data_collator,
+                callbacks=[EarlyStoppingCallback(early_stopping_patience=data_args.patience)]
+            )
 
     # Training
     if training_args.do_train:
