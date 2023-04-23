@@ -20,10 +20,10 @@ if [[ $DEBIAS == "orig" ]];then
             --model $MODEL_CLASS \
             --model_name_or_path $MODEL_NAME_OR_PATH
     elif [[ $METRIC == "stereo" ]];then
-        # python bias-bench/experiments/stereoset.py \
-        #     --model $MODEL_CLASS \
-        #     --model_name_or_path $MODEL_NAME_OR_PATH \
-        #     --batch_size 128
+        python bias-bench/experiments/stereoset.py \
+            --model $MODEL_CLASS \
+            --model_name_or_path $MODEL_NAME_OR_PATH \
+            --batch_size 128
 
         python bias-bench/experiments/stereoset_evaluation.py \
             --persistent_dir bias-bench \
@@ -34,48 +34,45 @@ if [[ $DEBIAS == "orig" ]];then
     else 
         echo "Metric Not Impemented"
     fi
-elif [[ $DEBIAS == "cda" ]];then
-    MODEL_CLASS=CDABertForMaskedLM
+elif [[ $DEBIAS == "cda" ]];then    
     MODEL_NAME_OR_PATH=bert-base-uncased
-    if  [[ $METRIC == "crows" ]];then
+    MODEL_CLASS=CDABertForMaskedLM
+    if  [[ $METRIC == "crows" ]];then        
         if  [[ $PEFT == "ft" ]];then
             python bias-bench/experiments/crows_debias.py \
                 --bias_type $BIAS_TYPE \
                 --model $MODEL_CLASS \
                 --model_name_or_path $MODEL_NAME_OR_PATH \
-                --load_path models/sft/$DEBIAS/$DATA/$BIAS_TYPE
-
-
-                models/sft/cda/bias-bios/gender
-
-
+                --load_path models/sft/$DEBIAS/$BIAS_TYPE/$DATA
         elif  [[ $PEFT == "sft" ]];then
             python bias-bench/experiments/crows_debias.py \
                 --bias_type $BIAS_TYPE \
                 --model $MODEL_CLASS \
                 --model_name_or_path $MODEL_NAME_OR_PATH \
-                --load_path models/$PEFT/$DEBIAS/$BIAS_TYPE/$PEFT
-
+                --load_path models/$PEFT/$DEBIAS/$BIAS_TYPE/$DATA/$PEFT
         else
             python bias-bench/experiments/crows_debias.py \
                 --bias_type $BIAS_TYPE \
                 --model $MODEL_CLASS \
                 --model_name_or_path $MODEL_NAME_OR_PATH \
-                --adapter_path models/cda/mlm
-
+                --adapter_path models/$PEFT/$DEBIAS/$BIAS_TYPE/$DATA/mlm
         fi
-    elif  [[$METRIC == "stereo"]];then
-        python bias-bench/experiments/stereoset_debias.py \
-            --model $MODEL_CLASS \
-            --bias_type $BIAS_TYPE \
-            --load_path composable-sft/models/cda/gender/sft
-                
+    elif  [[ $METRIC == "stereo" ]];then
+        if  [[ $PEFT == "ft" ]];then
+            python bias-bench/experiments/stereoset_debias.py \
+                --model $MODEL_CLASS \
+                --model_name_or_path $MODEL_NAME_OR_PATH \
+                --load_path models/sft/$DEBIAS/$BIAS_TYPE/$DATA \
+                --batch_size 128
+        elif  [[ $PEFT == "sft" ]];then
+        
+        else
+        
+        fi   
         python bias-bench/experiments/stereoset_evaluation.py \
             --persistent_dir bias-bench \
-            --predictions_file bias-bench/results/stereoset/stereoset-m-$MODEL_CLASS-c-$MODEL_NAME_OR_PATH-t-$BIAS_TYPE.json \
-            --output_file eval_results/$MODEL_CLASS-$MODEL_NAME_OR_PATH.json
-
-
+            --predictions_file bias-bench/results/stereoset/stereoset_m-${MODEL_CLASS}_c-${MODEL_NAME_OR_PATH}.json            
+                     
     else 
         echo "Metric Not Impemented"
     fi
