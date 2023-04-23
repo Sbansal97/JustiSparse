@@ -109,7 +109,7 @@ elif [[ $DEBIAS == "adv" ]];then
             --sparse_ft_max_steps_per_iteration 10000 \
             --adv_debias \
             --load_best_model_at_end > models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET}/training.log
-    else:
+    else
         python run_intrinsic.py \
             --model_name_or_path bert-base-uncased \
             --protected_attribute_column 'g' \
@@ -136,5 +136,5 @@ elif [[ $DEBIAS == "adv" ]];then
             --cache_dir $cache_dir \
             --adv_debias \
             --load_best_model_at_end > models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET}/training.log
+    fi
 fi
-

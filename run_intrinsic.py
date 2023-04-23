@@ -142,10 +142,11 @@ class DataTrainingArguments:
     peft: Optional[str] = field(
         default='sft', metadata={"help": "Default peft technique to use."}
     )
-    train_file: Optional[str] = field(default=None, metadata={"help": "The input training data file (a text file)."}),
+    train_file: Optional[str] = field(
+        default=None, metadata={"help": "The input training data file (a text file)."})
     validation_file: Optional[str] = field(
         default=None,
-        metadata={"help": "An optional input evaluation data file to evaluate the perplexity on (a text file)."},
+        metadata={"help": "An optional input evaluation data file to evaluate the perplexity on (a text file)."}
     )
     overwrite_cache: bool = field(
         default=False, metadata={"help": "Overwrite the cached training and evaluation sets"}

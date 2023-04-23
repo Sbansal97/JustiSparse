@@ -1,4 +1,4 @@
-!/bin/sh
+# !/bin/sh
 
 # SBATCH --job-name=peft-debias
 # SBATCH --mem 32G
@@ -8,4 +8,4 @@
 # SBATCH --ntasks 1
 # SBATCH --output /projects/tir6/general/srijanb/Spr23/JustiSparse/slurm_logs/log-%x-%J.txt
 
-bash run_intrinsic.sh pfeiffer 0 
+bash run_intrinsic.sh pfeiffer 0 adv group gab
