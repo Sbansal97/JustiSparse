@@ -65,9 +65,13 @@ elif [[ $DEBIAS == "cda" ]];then
                 --load_path models/sft/$DEBIAS/$BIAS_TYPE/$DATA \
                 --batch_size 128
         elif  [[ $PEFT == "sft" ]];then
-        
+            python bias-bench/experiments/stereoset_debias.py \
+                --model $MODEL_CLASS \
+                --model_name_or_path $MODEL_NAME_OR_PATH \
+                --load_path models/$PEFT/$DEBIAS/$BIAS_TYPE/$DATA/$PEFT \
+                --batch_size 128
         else
-        
+            echo "hi"
         fi   
         python bias-bench/experiments/stereoset_evaluation.py \
             --persistent_dir bias-bench \
