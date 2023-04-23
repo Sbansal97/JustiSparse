@@ -105,3 +105,18 @@ class LotteryTicketSparseFineTuner(SparseFineTuner):
         
         return result
 
+    
+    def fine_tune(self, **kwargs):
+        self.enable_masking()
+        self.optimizer = None
+        self.lr_scheduler = None
+        self.set_training_len(
+            self.sft_args.sparse_ft_min_steps_per_iteration,
+            self.sft_args.sparse_ft_max_steps_per_iteration,
+            self.sft_args.sparse_ft_max_epochs_per_iteration,
+        )
+        result = super().train(**kwargs)
+        return result
+
+    def load_mask(self,):
+        pass

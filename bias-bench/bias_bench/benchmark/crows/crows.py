@@ -159,8 +159,19 @@ class CrowSPairsRunner:
                     sent_more_score = score2
                     sent_less_score = score1
 
-                df_score = df_score.append(
-                    {
+                # df_score = df_score.append(
+                #     {
+                #         "sent_more": sent_more,
+                #         "sent_less": sent_less,
+                #         "sent_more_score": sent_more_score,
+                #         "sent_less_score": sent_less_score,
+                #         "score": pair_score,
+                #         "stereo_antistereo": direction,
+                #         "bias_type": bias,
+                #     },
+                #     ignore_index=True,
+                # )
+                df_item = {
                         "sent_more": sent_more,
                         "sent_less": sent_less,
                         "sent_more_score": sent_more_score,
@@ -168,9 +179,8 @@ class CrowSPairsRunner:
                         "score": pair_score,
                         "stereo_antistereo": direction,
                         "bias_type": bias,
-                    },
-                    ignore_index=True,
-                )
+                    }
+                df_score.loc[len(df_score.index)] = df_item
 
         print("=" * 100)
         print("Total examples:", N)
@@ -416,7 +426,8 @@ class CrowSPairsRunner:
                     "direction": direction,
                     "bias_type": bias_type,
                 }
-                df_data = df_data.append(df_item, ignore_index=True)
+                df_data.loc[len(df_data.index)] = df_item
+                # df_data = df_data.append(df_item, ignore_index=True)
 
         return df_data
 
