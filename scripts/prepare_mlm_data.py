@@ -15,17 +15,17 @@ def get_mlm():
 
     if args.dataset_name == 'bias-bios':
         dataset = load_dataset('parquet', data_files={
-            'train' : 'data/bias-bios/biasbios_train.pq', 
-            'validation' : 'data/bias-bios/biasbios_val.pq',
-            'test' : 'data/bias-bios/biasbios_test.pq'}
+            'train' : '../../orig-data/bias-bios/biasbios_train.pq', 
+            'validation' : '../../orig-data/bias-bios/biasbios_val.pq',
+            'test' : '../../orig-data/bias-bios/biasbios_test.pq'}
             )
 
         dataset = dataset.remove_columns(["text", "hard_text_untokenized", "text_without_gender"])
         dataset = dataset.rename_column("hard_text", "text")
 
-        dataset['train'].to_json("data/bias-bios/train.json")
-        dataset['validation'].to_json("data/bias-bios/validation.json")
-        dataset['test'].to_json("data/bias-bios/test.json")
+        dataset['train'].to_json("../data/bias-bios/train.json")
+        dataset['validation'].to_json("../data/bias-bios/validation.json")
+        dataset['test'].to_json("../data/bias-bios/test.json")
 
         train_texts  = list(dataset['train']['text'])
         valid_texts = list(dataset['validation']['text'])
@@ -52,20 +52,20 @@ def get_mlm():
 
     print (f"length : train {len(train_texts)}, val : {len(valid_texts)}, test : {len(test_texts)}")
 
-    data_dir = os.path.join('data', args.dataset_name, 'mlm')
-    os.makedirs(data_dir, exist_ok=True)
+    # data_dir = os.path.join('data', args.dataset_name, 'mlm')
+    # os.makedirs(data_dir, exist_ok=True)
 
-    with open(os.path.join(data_dir, 'train.txt'), 'w') as f:
-        for t in train_texts:
-            f.write(t.strip()+'\n')
+    # with open(os.path.join(data_dir, 'train.txt'), 'w') as f:
+    #     for t in train_texts:
+    #         f.write(t.strip()+'\n')
 
-    with open(os.path.join(data_dir, 'validation.txt'), 'w') as f:
-        for t in valid_texts:
-            f.write(t.strip()+'\n')
+    # with open(os.path.join(data_dir, 'validation.txt'), 'w') as f:
+    #     for t in valid_texts:
+    #         f.write(t.strip()+'\n')
 
-    with open(os.path.join(data_dir, 'test.txt'), 'w') as f:
-        for t in test_texts:
-            f.write(t.strip()+'\n')
+    # with open(os.path.join(data_dir, 'test.txt'), 'w') as f:
+    #     for t in test_texts:
+    #         f.write(t.strip()+'\n')
 
 if __name__ == "__main__":
     get_mlm()
