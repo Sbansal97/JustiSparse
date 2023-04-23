@@ -96,7 +96,20 @@ parser.add_argument(
     default=None,
     help="RNG seed. Used for logging in experiment ID.",
 )
-
+parser.add_argument(
+    "--adapter_path",
+    action="store",
+    type=str,
+    default=None,
+    help="adapter path",
+)
+parser.add_argument(
+    "--adapter_config",
+    action="store",
+    type=str,
+    default=None,
+    help="adapter path",
+)
 
 if __name__ == "__main__":
     args = parser.parse_args()
@@ -134,6 +147,9 @@ if __name__ == "__main__":
     model = getattr(models, args.model)(
         args.load_path or args.model_name_or_path, **kwargs
     )
+    if args.adapter_path:
+        model.load_adapter(args.adapter_path, config=args.adapter_config)
+        model.set_active_adapters("mlm")        
 
     if _is_self_debias(args.model):
         model._model.eval()

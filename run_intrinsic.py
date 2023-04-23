@@ -703,8 +703,88 @@ def main():
             max_length=max_seq_length,
         )
 
+
+    def mixed_counterfactual_augmentation(examples, bias_attribute_words):
+        """Applies racial/religious counterfactual data augmentation to a batch of
+        examples.
+
+        Notes:
+            * We apply CDA after the examples have potentially been grouped.
+            * This implementation can be made more efficient by operating on
+              token IDs as opposed to text. We currently decode each example
+              as it is simpler.
+        """
+        outputs = []
+        for input_ids in examples["input_ids"]:
+            # For simplicity, decode each example. It is easier to apply augmentation
+            # on text as opposed to token IDs.
+            sentence = tokenizer.decode(input_ids)
+            words = sentence.split()  # Tokenize based on whitespace.
+            augmented_sentence = words[:]
+
+            augmented = False
+            
+            # Sample the augmentation pairs.
+            r1_augmentation_pair = random.choice([1, 2])
+            r2_augmentation_pair = random.choice([0, 2])
+            r3_augmentation_pair = random.choice([0, 1])
+
+            for position, word in enumerate(words):
+                for augmentation_words in bias_attribute_words:
+                    # Implementation here.
+                    
+                    if len(augmentation_words)==3:
+                        r1_word, r2_word, r3_word = augmentation_words
+
+                        if r1_word == word:
+                            augmented = True
+                            augmented_sentence[position] = augmentation_words[
+                                r1_augmentation_pair
+                            ]
+
+                        if r2_word == word:
+                            augmented = True
+                            augmented_sentence[position] = augmentation_words[
+                                r2_augmentation_pair
+                            ]
+
+                        if r3_word == word:
+                            augmented = True
+                            augmented_sentence[position] = augmentation_words[
+                                r3_augmentation_pair
+                            ]
+                    elif augmentation_words==2 :
+                        r1_word, r2_word = augmentation_words
+                        if r1_word == word:
+                            augmented = True
+                            augmented_sentence[position] = r2_word
+
+                        if r2_word == word:
+                            augmented = True
+                            augmented_sentence[position] = r1_word
+
+            if augmented:
+                augmented_sentence = " ".join(augmented_sentence)
+                outputs.append(augmented_sentence)
+                outputs.append(sentence)
+
+        # There are potentially no counterfactual examples.
+        if not outputs:
+            return {"input_ids": [], "attention_mask": []}
+
+        return tokenizer(
+            outputs,
+            return_special_tokens_mask=True,
+            add_special_tokens=False,  # Special tokens are already added.
+            truncation=True,
+            padding=True,
+            max_length=max_seq_length,
+        )
+
+
+
     if data_args.counterfactual_augmentation is not None:
-        if data_args.counterfactual_augmentation not in ["gender", "race", "religion"]:
+        if data_args.counterfactual_augmentation not in ["gender", "race", "religion", "group"]:
             raise ValueError("Invalid CDA type: {data_args.counterfactual_augmentation")
 
         logger.info(f"Applying {data_args.counterfactual_augmentation} CDA.")
@@ -720,6 +800,11 @@ def main():
                 gender_counterfactual_augmentation,
                 bias_attribute_words=bias_attribute_words,
             )
+        if data_args.counterfactual_augmentation == "group":
+            counterfactual_augmentation_func = partial(
+                mixed_counterfactual_augmentation,
+                bias_attribute_words=bias_attribute_words,
+            )            
         else:
             counterfactual_augmentation_func = partial(
                 ternary_counterfactual_augmentation,

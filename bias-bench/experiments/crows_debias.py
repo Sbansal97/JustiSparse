@@ -152,10 +152,9 @@ if __name__ == "__main__":
     results = runner()
     print(f"Metric: {results}")
 
-    
-    with open('peft_cda_bios_bias_mlm.txt','a+') as f:
-        f.write(f'{args.adapter_config}\t{args.adapter_path}\t{results}\n')
+    # with open('peft_cda_bios_bias_mlm.txt','a+') as f:
+    #     f.write(f'{args.adapter_config}\t{args.adapter_path}\t{results}\n')
 
-    os.makedirs(f"{args.persistent_dir}/results/crows", exist_ok=True)
-    with open(f"{args.persistent_dir}/results/crows/{experiment_id}.json", "w") as f:
-        json.dump(results, f)
+    # os.makedirs(f"{args.persistent_dir}/results/crows", exist_ok=True)
+    # with open(f"{args.persistent_dir}/results/crows/{experiment_id}.json", "w") as f:
+    #     json.dump(results, f)
