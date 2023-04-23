@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# coding=utf-8
 # Copyright 2020 The HuggingFace Team All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -11,23 +13,28 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""
+Fine-tuning the library models for masked language modeling (BERT, ALBERT, RoBERTa...) on a text file or a dataset.
 
-# Modified by the Cambridge Language Technology Lab
+Here is the full list of checkpoints on the hub that can be fine-tuned by this script:
+https://huggingface.co/models?filter=fill-mask
+"""
+# You can also adapt this script on your own masked language modeling task. Pointers for this are left as comments.
+
 import logging
 import math
 import os
 import sys
 from dataclasses import dataclass, field
+from itertools import chain
 from typing import Optional
-import random
-import json
 
 from functools import partial
 import datasets
 from datasets import load_dataset
-import torch
-from torch import nn
 
+import random
+import evaluate
 import transformers
 from transformers import (
     CONFIG_MAPPING,
@@ -36,10 +43,10 @@ from transformers import (
     AutoModelForMaskedLM,
     AutoTokenizer,
     DataCollatorForLanguageModeling,
-    EarlyStoppingCallback,
     HfArgumentParser,
-    TrainingArguments,
     Trainer,
+    TrainingArguments,
+    is_torch_tpu_available,
     set_seed,
 )
 from transformers.adapters import AdapterArguments, AdapterTrainer, setup_adapter_training
@@ -47,21 +54,10 @@ from transformers.trainer_utils import get_last_checkpoint
 from transformers.utils import check_min_version
 from transformers.utils.versions import require_version
 
-from sft import (
-    LotteryTicketSFTTrainer,
-    SFT,
-    SftArguments
-)
-from adversarial import (
-    RegArguments,
-    AdvBertForMaskedLM,
-    AdvAdapterTrainer,
-    AdvLotteryTicketSFTTrainer
-)
-
+import json
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
-check_min_version("4.9.0.dev0")
+check_min_version("4.26.0")
 
 require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/language-modeling/requirements.txt")
 
@@ -79,8 +75,9 @@ class ModelArguments:
     model_name_or_path: Optional[str] = field(
         default=None,
         metadata={
-            "help": "The model checkpoint for weights initialization."
-            "Don't set if you want to train a model from scratch."
+            "help": (
+                "The model checkpoint for weights initialization. Don't set if you want to train a model from scratch."
+            )
         },
     )
     model_type: Optional[str] = field(
@@ -90,8 +87,10 @@ class ModelArguments:
     config_overrides: Optional[str] = field(
         default=None,
         metadata={
-            "help": "Override some existing default config settings when a model is trained from scratch. Example: "
-            "n_embd=10,resid_pdrop=0.2,scale_attn_weights=false,summary_type=cls_index"
+            "help": (
+                "Override some existing default config settings when a model is trained from scratch. Example: "
+                "n_embd=10,resid_pdrop=0.2,scale_attn_weights=false,summary_type=cls_index"
+            )
         },
     )
     config_name: Optional[str] = field(
@@ -115,8 +114,10 @@ class ModelArguments:
     use_auth_token: bool = field(
         default=False,
         metadata={
-            "help": "Will use the token generated when running `transformers-cli login` (necessary to use this script "
-            "with private models)."
+            "help": (
+                "Will use the token generated when running `huggingface-cli login` (necessary to use this script "
+                "with private models)."
+            )
         },
     )
 
@@ -132,24 +133,17 @@ class DataTrainingArguments:
     """
     Arguments pertaining to what data we are going to input our model for training and eval.
     """
-    protected_attribute_column: Optional[str] = field(
-        default=None,
-        metadata={"help": "Column of the protected attribute"},
-    )
+
     dataset_name: Optional[str] = field(
         default=None, metadata={"help": "The name of the dataset to use (via the datasets library)."}
     )
     dataset_config_name: Optional[str] = field(
         default=None, metadata={"help": "The configuration name of the dataset to use (via the datasets library)."}
     )
-    peft: Optional[str] = field(
-        default='sft', metadata={"help": "Default peft technique to use."}
-    )
-    train_file: Optional[str] = field(
-        default=None, metadata={"help": "The input training data file (a text file)."})
+    train_file: Optional[str] = field(default=None, metadata={"help": "The input training data file (a text file)."})
     validation_file: Optional[str] = field(
         default=None,
-        metadata={"help": "An optional input evaluation data file to evaluate the perplexity on (a text file)."}
+        metadata={"help": "An optional input evaluation data file to evaluate the perplexity on (a text file)."},
     )
     overwrite_cache: bool = field(
         default=False, metadata={"help": "Overwrite the cached training and evaluation sets"}
@@ -163,8 +157,10 @@ class DataTrainingArguments:
     max_seq_length: Optional[int] = field(
         default=None,
         metadata={
-            "help": "The maximum total input sequence length after tokenization. Sequences longer "
-            "than this will be truncated."
+            "help": (
+                "The maximum total input sequence length after tokenization. Sequences longer "
+                "than this will be truncated."
+            )
         },
     )
     preprocessing_num_workers: Optional[int] = field(
@@ -181,28 +177,28 @@ class DataTrainingArguments:
     pad_to_max_length: bool = field(
         default=False,
         metadata={
-            "help": "Whether to pad all samples to `max_seq_length`. "
-            "If False, will pad the samples dynamically when batching to the maximum length in the batch."
+            "help": (
+                "Whether to pad all samples to `max_seq_length`. "
+                "If False, will pad the samples dynamically when batching to the maximum length in the batch."
+            )
         },
     )
     max_train_samples: Optional[int] = field(
         default=None,
         metadata={
-            "help": "For debugging purposes or quicker training, truncate the number of training examples to this "
-            "value if set."
+            "help": (
+                "For debugging purposes or quicker training, truncate the number of training examples to this "
+                "value if set."
+            )
         },
     )
     max_eval_samples: Optional[int] = field(
         default=None,
         metadata={
-            "help": "For debugging purposes or quicker training, truncate the number of evaluation examples to this "
-            "value if set."
-        },
-    )
-    patience: Optional[int] = field(
-        default=100,
-        metadata={
-            "help": "Patience for early stopping"
+            "help": (
+                "For debugging purposes or quicker training, truncate the number of evaluation examples to this "
+                "value if set."
+            )
         },
     )
     dropout_debias: bool = field(
@@ -217,8 +213,8 @@ class DataTrainingArguments:
             "help": "What type of counterfactual augmentation to apply. Defaults to `None`."
         },
     )
-    bias_attribute_words_file: str = field(
-        default='data/bias_attribute_words.json',
+    persistent_dir: str = field(
+        default='../../../corpora/',
         metadata={"help": "Directory where all persistent data will be stored."},
     )
 
@@ -228,10 +224,12 @@ class DataTrainingArguments:
         else:
             if self.train_file is not None:
                 extension = self.train_file.split(".")[-1]
-                assert extension in ["csv", "json", "jsonl", "txt"], "`train_file` should be a csv, a json or a txt file."
+                if extension not in ["csv", "json", "txt"]:
+                    raise ValueError("`train_file` should be a csv, a json or a txt file.")
             if self.validation_file is not None:
                 extension = self.validation_file.split(".")[-1]
-                assert extension in ["csv", "json", "jsonl",  "txt"], "`validation_file` should be a csv, a json or a txt file."
+                if extension not in ["csv", "json", "txt"]:
+                    raise ValueError("`validation_file` should be a csv, a json or a txt file.")
 
 
 def main():
@@ -239,19 +237,21 @@ def main():
     # or by passing the --help flag to this script.
     # We now keep distinct sets of args, for a cleaner separation of concerns.
 
-    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, SftArguments, TrainingArguments, AdapterArguments, RegArguments))
+    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, TrainingArguments, AdapterArguments))
     if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
         # If we pass only one argument to the script and it's the path to a json file,
         # let's parse it to get our arguments.
-        model_args, data_args, sft_args, training_args, adapter_args, reg_args = parser.parse_json_file(json_file=os.path.abspath(sys.argv[1]))
+        model_args, data_args, training_args, adapter_args = parser.parse_json_file(
+            json_file=os.path.abspath(sys.argv[1])
+        )
     else:
-        model_args, data_args, sft_args, training_args, adapter_args, reg_args = parser.parse_args_into_dataclasses()
+        model_args, data_args, training_args, adapter_args = parser.parse_args_into_dataclasses()
 
     # Setup logging
     logging.basicConfig(
         format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
         datefmt="%m/%d/%Y %H:%M:%S",
-        handlers=[logging.StreamHandler(sys.stdout)]
+        handlers=[logging.StreamHandler(sys.stdout)],
     )
 
     log_level = training_args.get_process_log_level()
@@ -299,9 +299,10 @@ def main():
     if data_args.dataset_name is not None:
         # Downloading and loading a dataset from the hub.
         raw_datasets = load_dataset(
-            data_args.dataset_name, 
-            data_args.dataset_config_name, 
-            cache_dir=model_args.cache_dir
+            data_args.dataset_name,
+            data_args.dataset_config_name,
+            cache_dir=model_args.cache_dir,
+            use_auth_token=True if model_args.use_auth_token else None,
         )
         if "validation" not in raw_datasets.keys():
             raw_datasets["validation"] = load_dataset(
@@ -309,12 +310,14 @@ def main():
                 data_args.dataset_config_name,
                 split=f"train[:{data_args.validation_split_percentage}%]",
                 cache_dir=model_args.cache_dir,
+                use_auth_token=True if model_args.use_auth_token else None,
             )
             raw_datasets["train"] = load_dataset(
                 data_args.dataset_name,
                 data_args.dataset_config_name,
                 split=f"train[{data_args.validation_split_percentage}%:]",
                 cache_dir=model_args.cache_dir,
+                use_auth_token=True if model_args.use_auth_token else None,
             )
     else:
         data_files = {}
@@ -326,13 +329,13 @@ def main():
             extension = data_args.validation_file.split(".")[-1]
         if extension == "txt":
             extension = "text"
-        if extension == 'jsonl':
-            extension = 'json'
         raw_datasets = load_dataset(
             extension,
             data_files=data_files,
-            cache_dir=model_args.cache_dir
+            cache_dir=model_args.cache_dir,
+            use_auth_token=True if model_args.use_auth_token else None,
         )
+
         # If no validation data is there, validation_split_percentage will be used to divide the dataset.
         if "validation" not in raw_datasets.keys():
             raw_datasets["validation"] = load_dataset(
@@ -340,12 +343,14 @@ def main():
                 data_files=data_files,
                 split=f"train[:{data_args.validation_split_percentage}%]",
                 cache_dir=model_args.cache_dir,
+                use_auth_token=True if model_args.use_auth_token else None,
             )
             raw_datasets["train"] = load_dataset(
                 extension,
                 data_files=data_files,
                 split=f"train[{data_args.validation_split_percentage}%:]",
                 cache_dir=model_args.cache_dir,
+                use_auth_token=True if model_args.use_auth_token else None,
             )
 
     # See more about loading any type of standard or custom dataset (from files, python dict, pandas DataFrame, etc) at
@@ -371,7 +376,7 @@ def main():
         if model_args.config_overrides is not None:
             logger.info(f"Overriding config: {model_args.config_overrides}")
             config.update_from_string(model_args.config_overrides)
-        logger.info(f"New config: {config}")
+            logger.info(f"New config: {config}")
 
     # Apply increased dropout regularized for debiasing if specified.
     # We use the hyperparameters specified in: https://arxiv.org/abs/2010.06032.
@@ -386,6 +391,7 @@ def main():
         else:
             config.hidden_dropout_prob = 0.05
             config.attention_probs_dropout_prob = 0.05
+
 
     tokenizer_kwargs = {
         "cache_dir": model_args.cache_dir,
@@ -402,62 +408,27 @@ def main():
             "You are instantiating a new tokenizer from scratch. This is not supported by this script."
             "You can do it from another script, save it, and load it from here, using --tokenizer_name."
         )
-    # Preprocessing the datasets.
-
-    # First we tokenize all the texts.
-    if training_args.do_train:
-        column_names = raw_datasets["train"].column_names
-        if reg_args.adv_debias :
-            protected_attribute_list = list(set(raw_datasets["train"][data_args.protected_attribute_column]))
-            protected_attribute2id = {l: i for i, l in enumerate(protected_attribute_list)}
-    else:
-        column_names = raw_datasets["validation"].column_names
-        if reg_args.adv_debias :
-            protected_attribute_list = list(set(raw_datasets["validation"][data_args.protected_attribute_column]))
-            protected_attribute2id = {l: i for i, l in enumerate(protected_attribute_list)}
-
-    if reg_args.adv_debias :
-        reg_args.adv_attr_dim = len(protected_attribute2id)
-
-    text_column_name = "text" if "text" in column_names else column_names[0]
 
     if model_args.model_name_or_path:
-        if reg_args.adv_debias:
-            model = AdvBertForMaskedLM.from_pretrained(
-                model_args.model_name_or_path,
-                from_tf=bool(".ckpt" in model_args.model_name_or_path),
-                config=config,
-                cache_dir=model_args.cache_dir,
-                revision=model_args.model_revision,
-                use_auth_token=True if model_args.use_auth_token else None,
-                reg_args=reg_args
-            )
-        else:
-            model = AutoModelForMaskedLM.from_pretrained(
-                model_args.model_name_or_path,
-                from_tf=bool(".ckpt" in model_args.model_name_or_path),
-                config=config,
-                cache_dir=model_args.cache_dir,
-                revision=model_args.model_revision,
-                use_auth_token=True if model_args.use_auth_token else None,
-            )
+        model = AutoModelForMaskedLM.from_pretrained(
+            model_args.model_name_or_path,
+            from_tf=bool(".ckpt" in model_args.model_name_or_path),
+            config=config,
+            cache_dir=model_args.cache_dir,
+            revision=model_args.model_revision,
+            use_auth_token=True if model_args.use_auth_token else None,
+        )
     else:
-        logger.info("Training new model from scratch") 
-        if reg_args.adv_debias:
-            raise NotImplementedError
+        logger.info("Training new model from scratch")
         model = AutoModelForMaskedLM.from_config(config)
 
     # We resize the embeddings only when necessary to avoid index errors. If you are creating a model from scratch
     # on a small vocab and want a smaller embedding size, remove this test.
-
     embedding_size = model.get_input_embeddings().weight.shape[0]
-
-
     if len(tokenizer) > embedding_size:
         model.resize_token_embeddings(len(tokenizer))
 
     # Preprocessing the datasets.
-
     # First we tokenize all the texts.
     if training_args.do_train:
         column_names = raw_datasets["train"].column_names
@@ -514,12 +485,8 @@ def main():
         # We use `return_special_tokens_mask=True` because DataCollatorForLanguageModeling (see below) is more
         # efficient when it receives the `special_tokens_mask`.
         def tokenize_function(examples):
-            outputs = tokenizer(examples[text_column_name], return_special_tokens_mask=True)
-            if reg_args.adv_debias:
-                protected_attributes = [protected_attribute2id[i] for i in examples[data_args.protected_attribute_column]]
-                outputs['attr'] = protected_attributes
-            return outputs
-            
+            return tokenizer(examples[text_column_name], return_special_tokens_mask=True)
+
         with training_args.main_process_first(desc="dataset map tokenization"):
             tokenized_datasets = raw_datasets.map(
                 tokenize_function,
@@ -534,7 +501,7 @@ def main():
         # max_seq_length.
         def group_texts(examples):
             # Concatenate all texts.
-            concatenated_examples = {k: sum(examples[k], []) for k in examples.keys()}
+            concatenated_examples = {k: list(chain(*examples[k])) for k in examples.keys()}
             total_length = len(concatenated_examples[list(examples.keys())[0]])
             # We drop the small remainder, we could add padding if the model supported it instead of this drop, you can
             # customize this part to your needs.
@@ -562,7 +529,7 @@ def main():
         #         load_from_cache_file=not data_args.overwrite_cache,
         #         desc=f"Grouping texts in chunks of {max_seq_length}",
         #     )
-
+    
     def _create_bias_attribute_words(attribute_file, bias_type):
         """Creates list of bias attribute words (e.g., he/she).
 
@@ -705,7 +672,7 @@ def main():
 
         # Load the bias attribute words.
         bias_attribute_words = _create_bias_attribute_words(
-            data_args.bias_attribute_words_file,
+            f"{data_args.persistent_dir}/bias_attribute_words.json",
             bias_type=data_args.counterfactual_augmentation,
         )
 
@@ -734,16 +701,37 @@ def main():
             raise ValueError("--do_train requires a train dataset")
         train_dataset = tokenized_datasets["train"]
         if data_args.max_train_samples is not None:
-            train_dataset = train_dataset.select(range(data_args.max_train_samples))
+            max_train_samples = min(len(train_dataset), data_args.max_train_samples)
+            train_dataset = train_dataset.select(range(max_train_samples))
 
     if training_args.do_eval:
         if "validation" not in tokenized_datasets:
             raise ValueError("--do_eval requires a validation dataset")
         eval_dataset = tokenized_datasets["validation"]
         if data_args.max_eval_samples is not None:
-            eval_dataset = eval_dataset.select(range(data_args.max_eval_samples))
+            max_eval_samples = min(len(eval_dataset), data_args.max_eval_samples)
+            eval_dataset = eval_dataset.select(range(max_eval_samples))
 
-    
+        def preprocess_logits_for_metrics(logits, labels):
+            if isinstance(logits, tuple):
+                # Depending on the model and config, logits may contain extra tensors,
+                # like past_key_values, but logits always come first
+                logits = logits[0]
+            return logits.argmax(dim=-1)
+
+        metric = evaluate.load("accuracy")
+
+        def compute_metrics(eval_preds):
+            preds, labels = eval_preds
+            # preds have the same shape as the labels, after the argmax(-1) has been calculated
+            # by preprocess_logits_for_metrics
+            labels = labels.reshape(-1)
+            preds = preds.reshape(-1)
+            mask = labels != -100
+            labels = labels[mask]
+            preds = preds[mask]
+            return metric.compute(predictions=preds, references=labels)
+
     # Data collator
     # This one will take care of randomly masking the tokens.
     pad_to_multiple_of_8 = data_args.line_by_line and training_args.fp16 and not data_args.pad_to_max_length
@@ -753,104 +741,22 @@ def main():
         pad_to_multiple_of=8 if pad_to_multiple_of_8 else None,
     )
 
-    if data_args.peft == 'sft':
-        embeddings = model.base_model.embeddings.word_embeddings.weight
-        if model.base_model_prefix == 'bert':
-            lm_head = model.cls
-            decoder = model.cls.predictions.decoder
-        elif model.base_model_prefix == 'roberta':
-            lm_head = model.lm_head
-            decoder = model.lm_head.decoder
-        else:
-            raise ValueError(f'Unsupported model type {model.base_model_prefix}')
-
-        if sft_args.freeze_head:
-            decoder.weight = nn.Parameter(
-                torch.zeros_like(embeddings).copy_(embeddings)
-            )
-            for param in lm_head.parameters():
-                param.requires_grad = False
-
-        if sft_args.untie_embeddings:
-            decoder.weight = nn.Parameter(
-                torch.zeros_like(embeddings).copy_(embeddings)
-            )
-
-        if sft_args.freeze_decoder:
-            decoder.weight = nn.Parameter(
-                torch.zeros_like(embeddings).copy_(embeddings)
-            )
-            decoder.weight.requires_grad = False
-
-        if sft_args.freeze_embeddings:
-            embeddings.requires_grad = False
-
-        if sft_args.freeze_layer_norm:
-            for n, p in model.named_parameters():
-                if 'LayerNorm' in n:
-                    p.requires_grad = False
-
-        maskable_params = [
-            n for n, p in model.named_parameters()
-            if n.startswith(model.base_model_prefix) and p.requires_grad
-        ]
-        # Initialize our Trainer
-        if reg_args.adv_debias : 
-            trainer = AdvLotteryTicketSFTTrainer(
-                sft_args=sft_args,
-                reg_args=reg_args,
-                maskable_params=maskable_params,
-                model=model,
-                args=training_args,
-                train_dataset=train_dataset if training_args.do_train else None,
-                eval_dataset=eval_dataset if training_args.do_eval else None,
-                tokenizer=tokenizer,
-                data_collator=data_collator,
-                callbacks=[EarlyStoppingCallback(early_stopping_patience=data_args.patience)]
-            )
-        else:
-            trainer = LotteryTicketSFTTrainer(
-                sft_args=sft_args,
-                maskable_params=maskable_params,
-                model=model,
-                args=training_args,
-                train_dataset=train_dataset if training_args.do_train else None,
-                eval_dataset=eval_dataset if training_args.do_eval else None,
-                tokenizer=tokenizer,
-                data_collator=data_collator,
-                callbacks=[EarlyStoppingCallback(early_stopping_patience=data_args.patience)]
-            )
-
-    else:
-        # Setup adapters
-        setup_adapter_training(model, adapter_args, "mlm")
-        trainer_class = Trainer
-        if adapter_args.train_adapter:
-            trainer_class = AdapterTrainer
-            if reg_args.adv_debias:
-                trainer_class = AdvAdapterTrainer
-
-        if reg_args.adv_debias:
-            trainer = trainer_class(
-                model=model,
-                args=training_args,
-                reg_args=reg_args,
-                train_dataset=train_dataset if training_args.do_train else None,
-                eval_dataset=eval_dataset if training_args.do_eval else None,
-                tokenizer=tokenizer,
-                data_collator=data_collator,
-                callbacks=[EarlyStoppingCallback(early_stopping_patience=data_args.patience)]
-            )
-        else:
-            trainer = trainer_class(
-                model=model,
-                args=training_args,
-                train_dataset=train_dataset if training_args.do_train else None,
-                eval_dataset=eval_dataset if training_args.do_eval else None,
-                tokenizer=tokenizer,
-                data_collator=data_collator,
-                callbacks=[EarlyStoppingCallback(early_stopping_patience=data_args.patience)]
-            )
+    # Setup adapters
+    setup_adapter_training(model, adapter_args, data_args.dataset_name or "mlm")
+    # Initialize our Trainer
+    trainer_class = AdapterTrainer if adapter_args.train_adapter else Trainer
+    trainer = trainer_class(
+        model=model,
+        args=training_args,
+        train_dataset=train_dataset if training_args.do_train else None,
+        eval_dataset=eval_dataset if training_args.do_eval else None,
+        tokenizer=tokenizer,
+        data_collator=data_collator,
+        compute_metrics=compute_metrics if training_args.do_eval and not is_torch_tpu_available() else None,
+        preprocess_logits_for_metrics=preprocess_logits_for_metrics
+        if training_args.do_eval and not is_torch_tpu_available()
+        else None,
+    )
 
     # Training
     if training_args.do_train:
@@ -872,9 +778,6 @@ def main():
         trainer.save_metrics("train", metrics)
         trainer.save_state()
 
-        if training_args.local_rank <= 0 and data_args.peft == 'sft':
-            trainer.sft().save(training_args.output_dir)
-
     # Evaluation
     if training_args.do_eval:
         logger.info("*** Evaluate ***")
@@ -892,17 +795,19 @@ def main():
         trainer.log_metrics("eval", metrics)
         trainer.save_metrics("eval", metrics)
 
-    if training_args.push_to_hub:
-        kwargs = {"finetuned_from": model_args.model_name_or_path, "tasks": "fill-mask"}
-        if data_args.dataset_name is not None:
-            kwargs["dataset_tags"] = data_args.dataset_name
-            if data_args.dataset_config_name is not None:
-                kwargs["dataset_args"] = data_args.dataset_config_name
-                kwargs["dataset"] = f"{data_args.dataset_name} {data_args.dataset_config_name}"
-            else:
-                kwargs["dataset"] = data_args.dataset_name
+    kwargs = {"finetuned_from": model_args.model_name_or_path, "tasks": "fill-mask"}
+    if data_args.dataset_name is not None:
+        kwargs["dataset_tags"] = data_args.dataset_name
+        if data_args.dataset_config_name is not None:
+            kwargs["dataset_args"] = data_args.dataset_config_name
+            kwargs["dataset"] = f"{data_args.dataset_name} {data_args.dataset_config_name}"
+        else:
+            kwargs["dataset"] = data_args.dataset_name
 
+    if training_args.push_to_hub:
         trainer.push_to_hub(**kwargs)
+    else:
+        trainer.create_model_card(**kwargs)
 
 
 def _mp_fn(index):

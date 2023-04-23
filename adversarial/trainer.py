@@ -1,8 +1,17 @@
 from transformers.trainer_pt_utils import get_parameter_names
 from transformers.pytorch_utils import ALL_LAYERNORM_LAYERS
-from .reg_args import RegArguments
+from transformers.file_utils import ExplicitEnum
 from transformers.adapters import AdapterTrainer
-from sft.trainer import LotteryTickerSFTTrainer
+from transformers.utils import is_sagemaker_mp_enabled
+from transformers import Trainer
+
+import logging
+
+from .reg_args import RegArguments
+
+from sft.trainer import LotteryTicketSFTTrainer
+
+logger = logging.getLogger(__name__)
 
 class ShardedDDPOption(ExplicitEnum):
     SIMPLE = "simple"
@@ -12,7 +21,7 @@ class ShardedDDPOption(ExplicitEnum):
     AUTO_WRAP = "auto_wrap"
 
 
-class AdvLotteryTickerSFTTrainer(LotteryTickerSFTTrainer):
+class AdvLotteryTicketSFTTrainer(LotteryTicketSFTTrainer):
     def __init__(self, reg_args, **kwargs):
         super().__init__(**kwargs)
         self.reg_args = reg_args

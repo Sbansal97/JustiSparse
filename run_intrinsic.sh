@@ -17,7 +17,7 @@ if [[ $DEBIAS == "cda" ]];then
             --model_name_or_path bert-base-uncased \
             --train_file $train_path \
             --validation_file $val_path \
-            --output_dir models/${PEFT}/${DEBIAS}/${DATASET}/${AXIS} \
+            --output_dir models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET} \
             --do_train \
             --do_eval \
             --log_level 'info' \
@@ -51,7 +51,7 @@ if [[ $DEBIAS == "cda" ]];then
             --model_name_or_path bert-base-uncased \
             --train_file $train_path \
             --validation_file $val_path \
-            --output_dir models/${PEFT}/${DEBIAS}/${DATASET}/${AXIS} \
+            --output_dir models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET} \
             --do_train \
             --do_eval \
             --log_level 'info' \
@@ -81,7 +81,7 @@ elif [[ $DEBIAS == "adv" ]];then
             --protected_attribute_column 'g' \
             --train_file $train_path \
             --validation_file $val_path \
-            --output_dir models/${PEFT}/${DEBIAS}/${DATASET}/${AXIS} \
+            --output_dir models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET} \
             --do_train \
             --do_eval \
             --log_level 'info' \
@@ -115,7 +115,7 @@ elif [[ $DEBIAS == "adv" ]];then
             --protected_attribute_column 'g' \
             --train_file $train_path \
             --validation_file $val_path \
-            --output_dir models/${PEFT}/${DEBIAS}/${DATASET}/${AXIS} \
+            --output_dir models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET} \
             --do_train \
             --do_eval \
             --log_level 'info' \
@@ -135,6 +135,6 @@ elif [[ $DEBIAS == "adv" ]];then
             --adapter_config ${PEFT} \
             --cache_dir $cache_dir \
             --adv_debias \
-            --load_best_model_at_end #> models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET}/training.log
+            --load_best_model_at_end > models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET}/training.log
     fi
 fi
