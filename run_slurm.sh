@@ -8,4 +8,4 @@
 # SBATCH --ntasks 1
 # SBATCH --output /projects/tir6/general/srijanb/Spr23/JustiSparse/slurm_logs/log-%x-%J.txt
 
-bash run_intrinsic.sh pfeiffer 0 adv group gab
+bash run_intrinsic.sh pfeiffer 0 adv gender bias-bios
