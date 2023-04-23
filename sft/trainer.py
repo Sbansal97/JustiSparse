@@ -19,13 +19,6 @@ logger = logging.getLogger(__name__)
 from transformers.trainer_pt_utils import get_parameter_names
 from transformers.pytorch_utils import ALL_LAYERNORM_LAYERS
 
-class ShardedDDPOption(ExplicitEnum):
-    SIMPLE = "simple"
-    ZERO_DP_2 = "zero_dp_2"
-    ZERO_DP_3 = "zero_dp_3"
-    OFFLOAD = "offload"
-    AUTO_WRAP = "auto_wrap"
-
 
 class _RegLossCalculationCallback(TrainerCallback):
 
@@ -36,7 +29,7 @@ class _RegLossCalculationCallback(TrainerCallback):
         self._sft.calculate_reg_loss = True
 
 
-class SparseFineTuner(Trainer):
+class SFTTrainer(Trainer):
     """ Superclass for Trainers that learn sparse fine-tunings. Keeps track
     of original model parameters so that difference vectors can be calculated
     at the end of training, and which parameters are masked so that gradients
@@ -55,7 +48,6 @@ class SparseFineTuner(Trainer):
         self,
         *args,
         sft_args=None,
-        reg_args=None,
         maskable_params=None,
         **kwargs
     ):
@@ -66,11 +58,6 @@ class SparseFineTuner(Trainer):
             self.sft_args = SftArguments()
         else:
             self.sft_args = sft_args
-
-        if reg_args is None:
-            self.reg_args = RegArguments()
-        else:
-            self.reg_args = reg_args
 
         if maskable_params is None:
             self.maskable_params = set(
@@ -250,87 +237,97 @@ class SparseFineTuner(Trainer):
             self.control = self.callback_handler.on_save(self.args, self.state, self.control)
 
 
-    def create_optimizer(self):
-        """
-        Setup the optimizer.
-        We provide a reasonable default that works well. If you want to use something else, you can pass a tuple in the
-        Trainer's init through `optimizers`, or subclass and override this method in a subclass.
-        """
-        opt_model = self.model_wrapped if is_sagemaker_mp_enabled() else self.model
+class LotteryTicketSFTTrainer(SFTTrainer):
 
-        if self.optimizer is None:
-            decay_parameters = get_parameter_names(opt_model, ALL_LAYERNORM_LAYERS)
-            decay_parameters = [name for name in decay_parameters if "bias" not in name]
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        logger.setLevel(self.args.get_process_log_level())
+        if self.sft_args.ft_params_num is None:
+            self.n_tunable_params = int(
+                self.sft_args.ft_params_proportion * self._num_maskable_params
+            )
+        else:
+            self.n_tunable_params = self.sft_args.ft_params_num
 
-            if self.reg_args.adv_debias:
-                adv_parameters =[(n,p) for n,p in self.model.named_parameters() if any(x in n for x in ['adv_'])]
-                adv_parameters_names = [n for n,p in self.model.named_parameters() if any(x in n for x in ['adv_'])]
-
-                if adv_parameters:
-                    logger.info('Parameters for adversarial learning {}'.format([x[0] for x in adv_parameters]))
-
-                optimizer_grouped_parameters = [
-                    {
-                        "params": [
-                            p for n, p in opt_model.named_parameters() if (n in decay_parameters and p.requires_grad and n not in adv_parameters_names)
-                        ],
-                        "weight_decay": self.args.weight_decay,
-                    },
-                    {
-                        "params": [
-                            p for n, p in opt_model.named_parameters() if (n not in decay_parameters and p.requires_grad and n not in adv_parameters_names)
-                        ],
-                        "weight_decay": 0.0,
-                    },
-                ]
-                if adv_parameters:
-                    optimizer_grouped_parameters.append({
-                        'params': [p for n, p in adv_parameters],
-                        'initial_lr': self.args.learning_rate * self.reg_args.adv_lr_scale
-                    })
-            else:
-                optimizer_grouped_parameters = [
-                    {
-                        "params": [
-                            p for n, p in opt_model.named_parameters() if (n in decay_parameters and p.requires_grad)
-                        ],
-                        "weight_decay": self.args.weight_decay,
-                    },
-                    {
-                        "params": [
-                            p for n, p in opt_model.named_parameters() if (n not in decay_parameters and p.requires_grad)
-                        ],
-                        "weight_decay": 0.0,
-                    },
-                ]
-            
-
-            optimizer_cls, optimizer_kwargs = Trainer.get_optimizer_cls_and_kwargs(self.args)
-
-            if self.sharded_ddp == ShardedDDPOption.SIMPLE:
-                self.optimizer = OSS(
-                    params=optimizer_grouped_parameters,
-                    optim=optimizer_cls,
-                    **optimizer_kwargs,
+    def unfreeze_k_most_changed_params(self, k):
+        with torch.no_grad():
+            diffs = []
+            for n, p in tqdm(
+                list(self.model.named_parameters()),
+                desc='Finding masking threshold',
+                disable=self.args.local_rank > 0 or self.args.disable_tqdm,
+            ):
+                if n in self.maskable_params:
+                    delta = p - self._original_params[n].to(p.device)
+                    delta = delta.view(-1).tolist()
+                    mask = self._mask[n].view(-1).tolist()
+                    for d, m in zip(delta, mask):
+                        if not m:
+                            diffs.append(abs(d))
+                            
+            if k > len(diffs):
+                raise ValueError(
+                    'Was requested to unfreeze {k} params, but only '
+                    '{len(diffs)} are frozen.'
                 )
-            else:
-                self.optimizer = optimizer_cls(optimizer_grouped_parameters, **optimizer_kwargs)
-                if optimizer_cls.__name__ == "Adam8bit":
-                    import bitsandbytes
+            diffs = np.partition(diffs, len(diffs) - k)
+            thresh = diffs[len(diffs) - k]
+            logger.info(f'Masking threshold = {thresh}')
+            
+            n_masked = 0
+            for n, p in tqdm(
+                list(self.model.named_parameters()),
+                desc='Updating masks',
+                disable=self.args.local_rank > 0 or self.args.disable_tqdm,
+            ):
+                if n in self.maskable_params:
+                    abs_delta = (p - self._original_params[n].to(p.device)).abs()
+                    to_mask = (abs_delta >= thresh) & (~self._mask[n])
+                    self._mask[n] = to_mask | self._mask[n]
+                    n_masked += to_mask.sum()
 
-                    manager = bitsandbytes.optim.GlobalOptimManager.get_instance()
+            logger.info(f'Masked {n_masked} params')
 
-                    skipped = 0
-                    for module in opt_model.modules():
-                        if isinstance(module, nn.Embedding):
-                            skipped += sum({p.data_ptr(): p.numel() for p in module.parameters()}.values())
-                            print(f"skipped {module}: {skipped/2**20}M params")
-                            manager.register_module_override(module, "weight", {"optim_bits": 32})
-                            logger.debug(f"bitsandbytes: will optimize {module} in fp32")
-                    print(f"skipped: {skipped/2**20}M params")
+    def train(self, **kwargs):
+        self.freeze()
+        result = None
+        for it in range(self.sft_args.n_ft_iterations):
+            logger.info(f'Fine-tuning iteration {it+1}')
+            with torch.no_grad():
+                previous_params = {
+                    n: torch.zeros_like(p, device='cpu').copy_(p)
+                    for n, p in self.model.named_parameters()
+                }
 
-        if is_sagemaker_mp_enabled():
-            self.optimizer = smp.DistributedOptimizer(self.optimizer)
+            self.disable_masking()
+            self.optimizer = None
+            self.lr_scheduler = None
+            self.set_training_len(
+                self.sft_args.full_ft_min_steps_per_iteration,
+                self.sft_args.full_ft_max_steps_per_iteration,
+                self.sft_args.full_ft_max_epochs_per_iteration,
+            )
+            super().train(**kwargs)
+            self.save_model()
+            self.args.output_dir = os.path.join(self.args.output_dir, 'sft')
+            os.makedirs(self.args.output_dir, exist_ok=True)
+            
+            self.unfreeze_k_most_changed_params(
+                self.n_tunable_params // self.sft_args.n_ft_iterations
+            )
+            
+            with torch.no_grad():
+                for n, p in self.model.named_parameters():
+                    p.copy_(previous_params[n])
 
-        return self.optimizer
-
+            self.enable_masking()
+            self.optimizer = None
+            self.lr_scheduler = None
+            self.set_training_len(
+                self.sft_args.sparse_ft_min_steps_per_iteration,
+                self.sft_args.sparse_ft_max_steps_per_iteration,
+                self.sft_args.sparse_ft_max_epochs_per_iteration,
+            )
+            result = super().train(**kwargs)
+        
+        return result
