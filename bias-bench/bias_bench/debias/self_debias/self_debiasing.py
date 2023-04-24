@@ -8,7 +8,7 @@ from typing import List, Dict
 import torch
 from tqdm import tqdm
 
-from bias_bench.debias.self_debias.modeling import GPT2Wrapper
+# from bias_bench.debias.self_debias.modeling import GPT2Wrapper
 from bias_bench.debias.self_debias.io_utils import load_prompts, ModelOutput, Prompt
 
 DEBIASING_PREFIXES = [

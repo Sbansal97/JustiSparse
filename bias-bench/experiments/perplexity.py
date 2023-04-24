@@ -9,7 +9,7 @@ from transformers import GPT2TokenizerFast
 from datasets import load_dataset
 
 from bias_bench.model import models
-from bias_bench.debias.self_debias.modeling import GPT2Wrapper
+# from bias_bench.debias.self_debias.modeling import GPT2Wrapper
 from bias_bench.debias.self_debias.self_debiasing import (
     DEBIASING_PREFIXES,
     DEBIASING_KEYWORDS,
@@ -34,7 +34,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output_dir",
         type=str,
-        required=True,
         help="Directory where results are written.",
     )
     parser.add_argument(
@@ -155,7 +154,7 @@ if __name__ == "__main__":
     else:
         model.to(device)
         max_length = (
-            args.max_length if args.max_length > 0 else model.config.n_positions
+            args.max_length if args.max_length > 0 else model.config.max_position_embeddings
         ) - args.max_length_pattern
 
     if args.stride <= 0:
@@ -206,7 +205,7 @@ if __name__ == "__main__":
 
     print(f"Final perplexity: {ppl}")
 
-    os.makedirs(args.output_dir, exist_ok=True)
-    with open(f"{args.output_dir}/results.txt", "w", encoding="utf8") as fh:
-        fh.write(f"=== RESULT [{args.model}] ===\n")
-        fh.write(f"Perplexity: {ppl}\n")
+    # os.makedirs(args.output_dir, exist_ok=True)
+    # with open(f"{args.output_dir}/results.txt", "w", encoding="utf8") as fh:
+    #     fh.write(f"=== RESULT [{args.model}] ===\n")
+    #     fh.write(f"Perplexity: {ppl}\n")

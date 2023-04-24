@@ -39,14 +39,17 @@ class RevGrad(Module):
         return output
 
 class AdversarialClassifierHead(nn.Module):
-    def __init__(self, feat_dim, attr_dim, adv_grad_rev_strength, hidden_layer_num=1):
+    def __init__(self, feat_dim, attr_dim, adv_grad_rev_strength, adv_dropout=None, hidden_layer_num=1):
         super().__init__()
         input_dim = feat_dim
 
         mlp = []
         for i in range(hidden_layer_num):
+            if adv_dropout is not None:
+                mlp.append(nn.Dropout(adv_dropout))
             mlp.append(nn.Linear(input_dim, input_dim))
-            mlp.append(nn.ReLU())
+            mlp.append(nn.Tanh())
+
         mlp.append(nn.Linear(input_dim, attr_dim))
         self.mlp = nn.Sequential(*mlp)
         self.adv_grad_rev_strength = adv_grad_rev_strength
@@ -62,7 +65,7 @@ class AdversarialClassifierHead(nn.Module):
         return self.compute_loss_ce_equal_odds(*args, **kwargs)
 
 
-    def compute_loss_ce_equal_odds(self, attr_pred, attr_gt, label_gt):
+    def compute_loss_ce_equal_odds(self, attr_pred, attr_gt):
         adv_loss = F.cross_entropy(attr_pred, attr_gt, reduction='none', ignore_index=-1)
         return adv_loss.mean()
 

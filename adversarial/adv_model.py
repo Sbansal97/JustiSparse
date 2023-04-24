@@ -6,27 +6,17 @@ from .adv_head import AdversarialClassifierHead
 from .reg_args import RegArguments
 from transformers.modeling_outputs import ModelOutput
 from transformers import BertForSequenceClassification, BertForMaskedLM
+from transformers.adapters import BertAdapterModel
 
 @dataclass
 class AdvMaskedLMOutput(ModelOutput):
-    """
-    Base class for masked language models outputs.
-    Args:
-        loss (`torch.FloatTensor` of shape `(1,)`, *optional*, returned when `labels` is provided):
-            Masked language modeling (MLM) loss.
-        logits (`torch.FloatTensor` of shape `(batch_size, sequence_length, config.vocab_size)`):
-            Prediction scores of the language modeling head (scores for each vocabulary token before SoftMax).
-        hidden_states (`tuple(torch.FloatTensor)`, *optional*, returned when `output_hidden_states=True` is passed or when `config.output_hidden_states=True`):
-            Tuple of `torch.FloatTensor` (one for the output of the embeddings, if the model has an embedding layer, +
-            one for the output of each layer) of shape `(batch_size, sequence_length, hidden_size)`.
-            Hidden-states of the model at the output of each layer plus the optional initial embedding outputs.
-        attentions (`tuple(torch.FloatTensor)`, *optional*, returned when `output_attentions=True` is passed or when `config.output_attentions=True`):
-            Tuple of `torch.FloatTensor` (one for each layer) of shape `(batch_size, num_heads, sequence_length,
-            sequence_length)`.
-            Attentions weights after the attention softmax, used to compute the weighted average in the self-attention
-            heads.
-    """
+    loss: Optional[torch.FloatTensor] = None
+    adv_loss: Optional[torch.FloatTensor] = None
+    logits: torch.FloatTensor = None
+    hidden_states: Optional[Tuple[torch.FloatTensor]] = None
+    attentions: Optional[Tuple[torch.FloatTensor]] = None
 
+class AdvSequenceClassifierOutput(ModelOutput):
     loss: Optional[torch.FloatTensor] = None
     adv_loss: Optional[torch.FloatTensor] = None
     logits: torch.FloatTensor = None
@@ -34,21 +24,29 @@ class AdvMaskedLMOutput(ModelOutput):
     attentions: Optional[Tuple[torch.FloatTensor]] = None
 
 class AdvBertForSequenceClassification(BertForSequenceClassification):
-    def __init__(self, config):
+    def __init__(self, config, reg_args):
         super().__init__(config)
         # adversarial training variables
         self.adv_debias = False
         self.reg_args = None
         self.adv_model = None
+        self.finetune = False
+        self.build_adv_training(reg_args)
     
     def build_adv_training(self, reg_args: RegArguments):
         assert self.adv_model is None
         self.reg_args = reg_args
         if reg_args.adv_debias:
             self.adv_debias = True
-            self.adv_model = AdversarialClassifierHead(self.config.hidden_size, attr_dim=reg_args.adv_attr_dim,
-                                                       adv_objective=reg_args.adv_objective, hidden_layer_num=reg_args.adv_layer_num,
-                                                       adv_grad_rev_strength=reg_args.adv_grad_rev_strength)
+            self.adv_model = AdversarialClassifierHead(
+                                self.config.hidden_size, 
+                                attr_dim=reg_args.adv_attr_dim, 
+                                adv_dropout=reg_args.adv_dropout,
+                                hidden_layer_num=reg_args.adv_layer_num,
+                                adv_grad_rev_strength=reg_args.adv_grad_rev_strength
+                            )
+        if reg_args.finetune:
+            self.finetune = True
 
     def forward(
         self,
@@ -58,10 +56,12 @@ class AdvBertForSequenceClassification(BertForSequenceClassification):
         position_ids=None,
         head_mask=None,
         inputs_embeds=None,
+        return_dict=None,
         labels=None,
-        head_id=None,
         attr=None
     ):
+
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         outputs = self.bert(
             input_ids,
@@ -70,48 +70,157 @@ class AdvBertForSequenceClassification(BertForSequenceClassification):
             position_ids=position_ids,
             head_mask=head_mask,
             inputs_embeds=inputs_embeds,
+            return_dict=return_dict
         )
+
+        
 
         pooled_output = outputs[1]
         pooled_output = self.dropout(pooled_output)
-
-        task_id = head_id if self.use_head is None else self.use_head
-
-        if self.freeze:
-            pooled_output = pooled_output.detach()
-
-        if task_id == 0 or task_id is None:
-            logits = self.classifier(pooled_output)
-        else:
-            logits = self.mtl_classifiers[task_id - 1](pooled_output)
+        logits = self.classifier(pooled_output)
 
         adv_loss, attr_logits, attr_probs = None, None, None
-
-        outputs = (logits,) + outputs[2:]  # add hidden states and attention if they are here
-
+        loss = None
+        adv_loss = None
         if labels is not None:
-            if self.num_labels == 1:
-                #  We are doing regression
-                loss_fct = MSELoss()
-                loss = loss_fct(logits.view(-1), labels.view(-1))
+            if self.finetune:
+                if self.num_labels == 1:
+                    #  We are doing regression
+                    loss_fct = MSELoss()
+                    loss = loss_fct(logits.view(-1), labels.view(-1))
+                else:
+                    loss_fct = CrossEntropyLoss()
+                    loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
             else:
-                loss_fct = CrossEntropyLoss()
-                loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
+                loss = 0.0
 
 
             # main task adv debiasing, if it is the main task
             if self.adv_debias:
                 reg_args = self.reg_args
-                attr_logits = self.adv_model(pooled_output[:,0,:], rev_grad=True)
+                attr_logits = self.adv_model(pooled_output, rev_grad=True)
                 attr_probs = torch.nn.Softmax(-1)(attr_logits)
-                adv_loss = self.adv_model.compute_loss(attr_pred=attr_logits, attr_gt=attr,
-                                                       label_gt=labels, label_stats=reg_args.label_stats)
+                adv_loss = self.adv_model.compute_loss(attr_pred=attr_logits, attr_gt=attr)
                 loss += adv_loss * reg_args.adv_strength
 
-            outputs = (loss,) + outputs
+        if not return_dict:
+            output = (logits,) + outputs[2:]
+            return ((loss,) + output) if loss is not None else output
+        
+        return AdvSequenceClassifierOutput(
+            loss=loss,
+            adv_loss=adv_loss,
+            logits=logits,
+            hidden_states=outputs.hidden_states,
+            attentions=outputs.attentions,
+        )
 
-        outputs = outputs + ({'adv_loss': adv_loss, 'attr_probs': attr_probs}, )
-        return outputs  # (loss), logits, (hidden_states), (attentions)
+class AdvBertAdapterModel(BertAdapterModel):
+    def __init__(self, config, reg_args):
+        super().__init__(config)
+        # adversarial training variables
+        self.adv_debias = False
+        self.reg_args = None
+        self.adv_model = None
+        self.finetune = False
+        self.build_adv_training(reg_args)
+    
+    def build_adv_training(self, reg_args: RegArguments):
+        assert self.adv_model is None
+        self.reg_args = reg_args
+        if reg_args.adv_debias:
+            self.adv_debias = True
+            self.adv_model = AdversarialClassifierHead(
+                                self.config.hidden_size, 
+                                attr_dim=reg_args.adv_attr_dim, 
+                                adv_dropout=reg_args.adv_dropout,
+                                hidden_layer_num=reg_args.adv_layer_num,
+                                adv_grad_rev_strength=reg_args.adv_grad_rev_strength
+                            )
+        if reg_args.finetune:
+            self.finetune = True
+    
+    def forward(
+        self,
+        input_ids=None,
+        attention_mask=None,
+        token_type_ids=None,
+        position_ids=None,
+        head_mask=None,
+        inputs_embeds=None,
+        output_attentions=None,
+        output_hidden_states=None,
+        return_dict=None,
+        head=None,
+        output_adapter_gating_scores=False,
+        output_adapter_fusion_attentions=False,
+        attr=None,
+        **kwargs
+    ):
+        input_ids = input_ids.view(-1, input_ids.size(-1)) if input_ids is not None else None
+        attention_mask = attention_mask.view(-1, attention_mask.size(-1)) if attention_mask is not None else None
+        token_type_ids = token_type_ids.view(-1, token_type_ids.size(-1)) if token_type_ids is not None else None
+        position_ids = position_ids.view(-1, position_ids.size(-1)) if position_ids is not None else None
+        inputs_embeds = (
+            inputs_embeds.view(-1, inputs_embeds.size(-2), inputs_embeds.size(-1))
+            if inputs_embeds is not None
+            else None
+        )
+
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+
+        outputs = self.bert(
+            input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            head_mask=head_mask,
+            inputs_embeds=inputs_embeds,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+            return_dict=return_dict,
+            output_adapter_gating_scores=output_adapter_gating_scores,
+            output_adapter_fusion_attentions=output_adapter_fusion_attentions,
+            adapter_input_parallelized=kwargs.pop("adapter_input_parallelized", False),
+        )
+        # BERT & RoBERTa return the pooled output as second item, we don't need that in these heads
+        if not return_dict:
+            head_inputs = (outputs[0],) + outputs[2:]
+        else:
+            head_inputs = outputs
+        pooled_output = outputs[1]
+
+        loss = 0.0
+        logits = None
+
+        if self.finetune:
+            head_outputs = self.forward_head(
+                head_inputs,
+                head_name=head,
+                attention_mask=attention_mask,
+                return_dict=return_dict,
+                pooled_output=pooled_output
+                **kwargs,
+            )
+            loss = head_outputs[0]
+            logits = head_outputs[1]
+        
+
+
+        adv_loss = 0.0
+        if self.adv_debias:
+            reg_args = self.reg_args
+            attr_logits = self.adv_model(pooled_output, rev_grad=True)
+            attr_probs = torch.nn.Softmax(-1)(attr_logits)
+            adv_loss = self.adv_model.compute_loss(attr_pred=attr_logits, attr_gt=attr)
+            loss += adv_loss * reg_args.adv_strength
+            
+        
+        return AdvSequenceClassifierOutput(
+            loss=loss,
+            adv_loss=adv_loss,
+            logits=logits
+        )
 
 class AdvBertForMaskedLM(BertForMaskedLM):
 
@@ -126,8 +235,13 @@ class AdvBertForMaskedLM(BertForMaskedLM):
         self.reg_args = reg_args
         if reg_args.adv_debias:
             self.adv_debias = True
-            self.adv_model = AdversarialClassifierHead(self.config.hidden_size, attr_dim=reg_args.adv_attr_dim, hidden_layer_num=reg_args.adv_layer_num,
-                                                       adv_grad_rev_strength=reg_args.adv_grad_rev_strength)
+            self.adv_model = AdversarialClassifierHead(
+                                self.config.hidden_size, 
+                                attr_dim=reg_args.adv_attr_dim, 
+                                adv_dropout=reg_args.adv_dropout,
+                                hidden_layer_num=reg_args.adv_layer_num,
+                                adv_grad_rev_strength=reg_args.adv_grad_rev_strength
+                            )
 
     def forward(
         self,
@@ -175,6 +289,7 @@ class AdvBertForMaskedLM(BertForMaskedLM):
         )
 
         masked_lm_loss = None
+        adv_loss = None
         if labels is not None:
             loss_fct = CrossEntropyLoss()  # -100 index = padding token
             masked_lm_loss = loss_fct(prediction_scores.view(-1, self.config.vocab_size), labels.view(-1))
@@ -183,8 +298,7 @@ class AdvBertForMaskedLM(BertForMaskedLM):
                 reg_args = self.reg_args
                 attr_logits = self.adv_model(sequence_output[:,0,:], rev_grad=True)
                 attr_probs = torch.nn.Softmax(-1)(attr_logits)
-                adv_loss = self.adv_model.compute_loss(attr_pred=attr_logits, attr_gt=attr,
-                                                       label_gt=labels)
+                adv_loss = self.adv_model.compute_loss(attr_pred=attr_logits, attr_gt=attr)
                 masked_lm_loss += adv_loss * reg_args.adv_strength
 
         if not return_dict:
