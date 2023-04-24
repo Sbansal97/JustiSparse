@@ -88,7 +88,7 @@ parser.add_argument(
     help="Path to saved ContextDebias, CDA, or Dropout model checkpoint.",
 )
 parser.add_argument(
-    "--bias_type",
+    "--x",
     action="store",
     default="gender",
     choices=["gender", "race", "religion"],
