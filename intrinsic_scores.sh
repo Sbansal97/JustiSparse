@@ -6,9 +6,11 @@ METRIC=$3       # "stereo", "crows", "perplexity"
 PEFT=$4         # "ft", "sft", etc. 
 
 if [[ $BIAS_TYPE == "gender" ]];then
+    BIAS_CATEG=gender
     DATA=bias-bios
-elif [[ $BIAS_TYPE == "race" ]];then
+elif [[ $BIAS_TYPE == "group" ]];then
     DATA=gab
+    BIAS_CATEG=race
 fi
 
 if [[ $DEBIAS == "orig" ]];then
@@ -16,7 +18,7 @@ if [[ $DEBIAS == "orig" ]];then
     MODEL_NAME_OR_PATH=bert-base-uncased
     if  [[ $METRIC == "crows" ]];then
         python bias-bench/experiments/crows.py \
-            --bias_type $BIAS_TYPE \
+            --bias_type $BIAS_CATEG \
             --model $MODEL_CLASS \
             --model_name_or_path $MODEL_NAME_OR_PATH
     elif [[ $METRIC == "stereo" ]];then
@@ -40,19 +42,19 @@ elif [[ $DEBIAS == "cda" ]];then
     if  [[ $METRIC == "crows" ]];then        
         if  [[ $PEFT == "ft" ]];then
             python bias-bench/experiments/crows_debias.py \
-                --bias_type $BIAS_TYPE \
+                --bias_type $BIAS_CATEG \
                 --model $MODEL_CLASS \
                 --model_name_or_path $MODEL_NAME_OR_PATH \
                 --load_path models/sft/$DEBIAS/$BIAS_TYPE/$DATA
         elif  [[ $PEFT == "sft" ]];then
             python bias-bench/experiments/crows_debias.py \
-                --bias_type $BIAS_TYPE \
+                --bias_type $BIAS_CATEG \
                 --model $MODEL_CLASS \
                 --model_name_or_path $MODEL_NAME_OR_PATH \
                 --load_path models/$PEFT/$DEBIAS/$BIAS_TYPE/$DATA/$PEFT
         else
             python bias-bench/experiments/crows_debias.py \
-                --bias_type $BIAS_TYPE \
+                --bias_type $BIAS_CATEG \
                 --model $MODEL_CLASS \
                 --model_name_or_path $MODEL_NAME_OR_PATH \
                 --adapter_path models/$PEFT/$DEBIAS/$BIAS_TYPE/$DATA/mlm \
