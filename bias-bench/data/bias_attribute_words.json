@@ -293,112 +293,110 @@
             "asia"
         ]
     ],
-    “group” : [
+    "group" : [
         [
-            “jewish”,
-            “christian”,
-            “muslim”
+            "jewish",
+            "christian",
+            "muslim"
         ],
         [
-            “jews”,
-            “christians”,
-            “muslims”
+            "jews",
+            "christians",
+            "muslims"
         ],
         [
-            “allah”,
-            “god”
+            "allah",
+            "god"
         ],
         [
-            “torah”,
-            “bible”,
-            “quran”
+            "torah",
+            "bible",
+            "quran"
         ],
         [
-            “synagogue”,
-            “church”,
-            “mosque”
+            "synagogue",
+            "church",
+            "mosque"
         ],
         [
-            “rabbi”,
-            “priest”,
-            “imam”
+            "rabbi",
+            "priest",
+            "imam"
         ],
         [
-            “judaism”,
-            “christianity”,
-            “islam”
+            "judaism",
+            "christianity",
+            "islam"
         ],
         [
-            “black”,
-            “caucasian”,
-            “asian”
+            "black",
+            "caucasian",
+            "asian"
         ],
         [
-            “black”,
-            “caucasian”,
-            “mexican”
+            "black",
+            "caucasian",
+            "mexican"
         ],
         [
-            “african”,
-            “caucasian”,
-            “asian”
+            "african",
+            "caucasian",
+            "asian"
         ],
         [
-            “africans”,
-            “caucasians”,
-            “asians”
+            "africans",
+            "caucasians",
+            "asians"
         ],
         [
-            “black”,
-            “white”,
-            “asian”
+            "black",
+            "white",
+            "asian"
         ],
         [
-            “black”,
-            “white”,
-            “brown”
+            "black",
+            "white",
+            "brown"
         ],
         [
-            “blacks”,
-            “whites”,
-            “asians”
+            "blacks",
+            "whites",
+            "asians"
         ],
         [
-            “africa”,
-            “america”,
-            “asia”
+            "africa",
+            "america",
+            "asia"
         ],
         [
-            “africa”,
-            “america”,
-            “china”
+            "africa",
+            "america",
+            "china"
         ],
         [
-            “africa”,
-            “europe”,
-            “asia”
+            "africa",
+            "europe",
+            "asia"
         ],
         [
-            “homosexual”,
-            “straight”
+            "homosexual",
+            "straight"
         ],
         [
-            “gay”,
-            “straight”
+            "gay",
+            "straight"
         ],
         [
-            “lesbian”,
-            “straight”
+            "lesbian",
+            "straight"
         ],
         [
-            “transgender”,
-            “straight”
+            "transgender",
+            "straight"
         ],
         [
-            “queer”,
-            “straight”
+            "queer",
+            "straight"
         ]
     ]    
 }
-
-
