@@ -17,7 +17,7 @@ fi
 
 mkdir -p models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET}/adv-class
 
-python run_extrinsic.py \
+python run_adversarial.py \
     --model_name_or_path bert-base-uncased \
     --protected_attribute_column $attr \
     --label_column p \

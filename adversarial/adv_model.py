@@ -73,15 +73,14 @@ class AdvBertForSequenceClassification(BertForSequenceClassification):
             return_dict=return_dict
         )
 
-        
-
         pooled_output = outputs[1]
         pooled_output = self.dropout(pooled_output)
         logits = self.classifier(pooled_output)
 
         adv_loss, attr_logits, attr_probs = None, None, None
-        loss = None
-        adv_loss = None
+
+        loss = 0.0
+
         if labels is not None:
             if self.finetune:
                 if self.num_labels == 1:
@@ -91,11 +90,7 @@ class AdvBertForSequenceClassification(BertForSequenceClassification):
                 else:
                     loss_fct = CrossEntropyLoss()
                     loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
-            else:
-                loss = 0.0
 
-
-            # main task adv debiasing, if it is the main task
             if self.adv_debias:
                 reg_args = self.reg_args
                 attr_logits = self.adv_model(pooled_output, rev_grad=True)
@@ -109,10 +104,7 @@ class AdvBertForSequenceClassification(BertForSequenceClassification):
         
         return AdvSequenceClassifierOutput(
             loss=loss,
-            adv_loss=adv_loss,
-            logits=logits,
-            hidden_states=outputs.hidden_states,
-            attentions=outputs.attentions,
+            logits=logits
         )
 
 class AdvBertAdapterModel(BertAdapterModel):

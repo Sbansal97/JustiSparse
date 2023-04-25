@@ -6,6 +6,7 @@ import random
 import numpy as np
 import torch
 from tqdm import tqdm
+from typing import Dict
 
 from transformers import Trainer, TrainerCallback
 from transformers.utils import is_sagemaker_mp_enabled, ExplicitEnum
@@ -23,7 +24,7 @@ class _RegLossCalculationCallback(TrainerCallback):
 
     def __init__(self, sft):
         self._sft = sft
-
+        
     def on_step_begin(self, args, state, control, **kwargs):
         self._sft.calculate_reg_loss = True
 
@@ -202,7 +203,7 @@ class SFTTrainer(Trainer):
         if self._masking_enabled:
             # set gradients for non-trainable parametres to zero.
             for n, p in self.model.named_parameters():
-                if n in self.maskable_params and p.grad is not None:
+                if n in self.maskable_params and p.grad is not None and n in self._mask:
                     p.grad *= self._mask[n]
         return loss
 
@@ -234,7 +235,6 @@ class SFTTrainer(Trainer):
         if self.control.should_save:
             self._save_checkpoint(model, trial, metrics=metrics)
             self.control = self.callback_handler.on_save(self.args, self.state, self.control)
-
 
 class LotteryTicketSFTTrainer(SFTTrainer):
 
@@ -329,4 +329,18 @@ class LotteryTicketSFTTrainer(SFTTrainer):
             )
             result = super().train(**kwargs)
         
+        return result
+    
+    def fine_tune(self, **kwargs):
+        result = None
+
+        self.enable_masking()
+        self.optimizer = None
+        self.lr_scheduler = None
+        self.set_training_len(
+            self.sft_args.sparse_ft_min_steps_per_iteration,
+            self.sft_args.sparse_ft_max_steps_per_iteration,
+            self.sft_args.sparse_ft_max_epochs_per_iteration,
+        )
+        result = super().train(**kwargs)
         return result

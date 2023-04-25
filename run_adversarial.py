@@ -47,8 +47,13 @@ from sft import (
     SftArguments,
     decode_sparse_tensor
 )
+from transformers.adapters import AdapterArguments, setup_adapter_training
 
-from patch import DebiasArguments, PatchLotteryTicketSFTTrainer, PatchAdapterTrainer
+from adversarial import (
+    RegArguments,
+    AdvBertForSequenceClassification,
+    AdvAdapterTrainer
+)
 
 logger = logging.getLogger(__name__)
 
@@ -84,11 +89,15 @@ class DataTrainingArguments:
     )
     text_column: Optional[str] = field(
         default='text',
-        metadata={"help": "Column name containing label ."},
+        metadata={"help": "Column name containing text ."},
     )
     label_column: Optional[str] = field(
         default='label',
         metadata={"help": "Column name containing label ."},
+    )
+    protected_attribute_column: Optional[str] = field(
+        default=None,
+        metadata={"help": "Column name containing protected attribute ."},
     )
 
     eval_split: Optional[str] = field(
@@ -186,8 +195,8 @@ def main():
     # or by passing the --help flag to this script.
     # We now keep distinct sets of args, for a cleaner separation of concerns.
     
-    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, SftArguments, DebiasArguments, TrainingArguments))
-    model_args, data_args, sft_args, debias_args, training_args = parser.parse_args_into_dataclasses()
+    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, SftArguments, AdapterArguments, RegArguments, TrainingArguments))
+    model_args, data_args, sft_args, adapter_args, reg_args, training_args = parser.parse_args_into_dataclasses()
 
     # Setup logging
     logging.basicConfig(
@@ -262,6 +271,20 @@ def main():
         label_list = list(set(dataset[data_args.label_column]))
         return label_list
 
+    if training_args.do_train:
+        column_names = raw_datasets["train"].column_names
+        if reg_args.adv_debias :
+            protected_attribute_list = list(set(raw_datasets["train"][data_args.protected_attribute_column]))
+            protected_attribute2id = {l: i for i, l in enumerate(protected_attribute_list)}
+    else:
+        column_names = raw_datasets["validation"].column_names
+        if reg_args.adv_debias :
+            protected_attribute_list = list(set(raw_datasets["validation"][data_args.protected_attribute_column]))
+            protected_attribute2id = {l: i for i, l in enumerate(protected_attribute_list)}
+
+    if reg_args.adv_debias :
+        reg_args.adv_attr_dim = len(protected_attribute2id)
+
     if training_args.do_predict:
         predict_dataset = raw_datasets[data_args.predict_split]
         label_list = get_labels(predict_dataset)
@@ -285,23 +308,12 @@ def main():
         if data_args.max_train_samples is not None:
             max_train_samples = min(len(train_dataset), data_args.max_train_samples)
             train_dataset = train_dataset.select(range(max_train_samples))
-        
 
+    
 
     num_labels = len(label_list)
     label2id = {l: i for i, l in enumerate(label_list)}
 
-    # Load pretrained model and tokenizer
-    # In distributed training, the .from_pretrained methods guarantee that only one local process can concurrently
-    # download model & vocab.
-    config = AutoConfig.from_pretrained(
-        model_args.config_name if model_args.config_name else model_args.model_name_or_path,
-        num_labels=num_labels,
-        finetuning_task="sst2",
-        cache_dir=model_args.cache_dir,
-        revision=model_args.model_revision,
-        use_auth_token=True if model_args.use_auth_token else None,
-    )
 
     tokenizer = AutoTokenizer.from_pretrained(
         model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
@@ -312,48 +324,13 @@ def main():
         use_auth_token=True if model_args.use_auth_token else None,
     )
 
-    model = AutoModelForSequenceClassification.from_pretrained(
+    model = AdvBertForSequenceClassification.from_pretrained(
         model_args.model_name_or_path,
-        from_tf=bool(".ckpt" in model_args.model_name_or_path),
-        config=config,
         cache_dir=model_args.cache_dir,
-        revision=model_args.model_revision,
-        use_auth_token=True if model_args.use_auth_token else None,
+        num_labels=num_labels,
+        reg_args=reg_args
     )
 
-    if debias_args.debias_configuration != "none":
-        if debias_args.peft == 'sft':
-            mask = None
-            task_ft = SFT()
-            tensors = torch.load(debias_args.patch_path, map_location=training_args.device)
-
-            if 'diffs' in tensors:
-                diffs = {
-                    p: decode_sparse_tensor(d).to_dense()
-                    for p, d in tensors['diffs'].items()
-                }
-            else:
-                diffs = {}
-
-            if 'abs' in tensors:
-                abs = tensors['abs']
-            else:
-                abs = {}
-
-            if not diffs and not abs:
-                logger.warn(f'Empty SFT {debias_args.patch_path}')
-
-            task_ft.diffs = diffs
-            if debias_args.debias_configuration == 'before':
-                task_ft.apply(model, with_abs=False)
-
-            mask = {}
-            for k,v in diffs.items():
-                # unmasking non-debias params
-                v_mask = (v==0).to(v.dtype).to(training_args.device)
-                mask[k] = v_mask
-        elif debias_args.peft is not None and debias_args.debias_configuration == 'before':
-            model.load_adapter(debias_args.patch_path)
 
     # Preprocessing the datasets
     # Padding strategy
@@ -371,6 +348,9 @@ def main():
             max_length=data_args.max_seq_length,
             truncation=True,
         )
+        if reg_args.adv_debias:
+                protected_attributes = [protected_attribute2id[i] for i in examples[data_args.protected_attribute_column]]
+                tokenized_examples['attr'] = protected_attributes
         tokenized_examples['label'] = [
             label2id.get(label, label)
             for label in examples[data_args.label_column]
@@ -420,70 +400,26 @@ def main():
     # Data collator will default to DataCollatorWithPadding, so we change it if we already did the padding.
     if data_args.pad_to_max_length:
         data_collator = default_data_collator
+
     elif training_args.fp16:
         data_collator = DataCollatorWithPadding(tokenizer, pad_to_multiple_of=8)
     else:
         data_collator = None
 
-    if sft_args.freeze_layer_norm:
-        for n, p in model.named_parameters():
-            if 'LayerNorm' in n:
-                p.requires_grad = False
-
-    maskable_params = [
-        n for n, p in model.named_parameters()
-        if n.startswith(model.base_model_prefix) and p.requires_grad
-    ]
 
     # Initialize our Trainer
-    if debias_args.debias_configuration == 'none':
-        trainer_cls = Trainer
-        trainer = trainer_cls(
-            model=model,
-            args=training_args,
-            train_dataset=train_dataset if training_args.do_train else None,
-            eval_dataset=eval_dataset if training_args.do_eval else None,
-            tokenizer=tokenizer,
-            data_collator=data_collator,
-            compute_metrics=compute_metrics,
-        )
-    else:
-        if debias_args.peft == 'sft':
-            trainer_cls = PatchLotteryTicketSFTTrainer
-            trainer = trainer_cls(
-                sft_args=sft_args,
-                maskable_params=maskable_params,
-                model=model,
-                args=training_args,
-                train_dataset=train_dataset if training_args.do_train else None,
-                eval_dataset=eval_dataset if training_args.do_eval else None,
-                tokenizer=tokenizer,
-                data_collator=data_collator,
-                compute_metrics=compute_metrics,
-                evaluate_with_patch=debias_args.debias_configuration == 'after'
-            )
-
-            if debias_args.debias_configuration == "after":
-                trainer.set_diffs(diffs)
-
-            if mask is not None:
-                logger.info('using mask')
-                trainer.set_mask(mask)
-        else:
-            trainer_cls = PatchAdapterTrainer
-            trainer = trainer_cls(
-                        model=model,
-                        args=training_args,
-                        train_dataset=train_dataset if training_args.do_train else None,
-                        eval_dataset=eval_dataset if training_args.do_eval else None,
-                        tokenizer=tokenizer,
-                        data_collator=data_collator,
-                        compute_metrics=compute_metrics,
-                        evaluate_with_patch=debias_args.debias_configuration == 'after',
-                        adapter_path=debias_args.patch_path
-                        )
-            if debias_args.debias_configuration == 'before':
-                trainer.freeze_adapter()
+    trainer_cls = AdvAdapterTrainer
+    setup_adapter_training(model, adapter_args, "class")
+    trainer = trainer_cls(
+        model=model,
+        args=training_args,
+        reg_args=reg_args,
+        train_dataset=train_dataset if training_args.do_train else None,
+        eval_dataset=eval_dataset if training_args.do_eval else None,
+        tokenizer=tokenizer,
+        data_collator=data_collator,
+        compute_metrics=compute_metrics,
+    )
 
     # Training
     if training_args.do_train:
@@ -492,13 +428,9 @@ def main():
             checkpoint = training_args.resume_from_checkpoint
         elif last_checkpoint is not None:
             checkpoint = last_checkpoint
-        if debias_args.debias_configuration == 'none':
-            train_result = trainer.train(resume_from_checkpoint=checkpoint)
-        else:
-            if debias_args.peft == 'sft':
-                train_result = trainer.fine_tune(resume_from_checkpoint=checkpoint)
-            else:
-                train_result = trainer.train(resume_from_checkpoint=checkpoint)
+
+        train_result = trainer.train(resume_from_checkpoint=checkpoint)
+        
         metrics = train_result.metrics
         max_train_samples = (
             data_args.max_train_samples if data_args.max_train_samples is not None else len(train_dataset)

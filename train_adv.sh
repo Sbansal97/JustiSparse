@@ -17,7 +17,7 @@ fi
 
 mkdir -p models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET}/only-adv
 
-python run_extrinsic.py \
+python run_adversarial.py \
     --model_name_or_path bert-base-uncased \
     --protected_attribute_column $attr \
     --label_column p \
@@ -44,4 +44,4 @@ python run_extrinsic.py \
     --cache_dir $cache_dir \
     --adv_debias \
     --train_adapter \
-    --load_best_model_at_end > models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET}/only-adv/training.log
+    --load_best_model_at_end  > models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET}/only-adv/training.log
