@@ -57,8 +57,8 @@ elif [[ $DEBIAS == "cda" ]];then
                 --bias_type $BIAS_CATEG \
                 --model $MODEL_CLASS \
                 --model_name_or_path $MODEL_NAME_OR_PATH \
-                --adapter_path models/pfeiffer/adv/gender/bias-bios/adv-mlm/mlm \
-                --adapter_config $PEFT
+                --adapter_path models/prefix_tuning_flat/cda/gender/bias-bios/checkpoint-1000/mlm \
+                --adapter_config $PEFT            
             # --adapter_path models/$PEFT/$DEBIAS/$BIAS_TYPE/$DATA/mlm \                
         fi
     elif  [[ $METRIC == "stereo" ]];then
@@ -110,7 +110,7 @@ elif [[ $DEBIAS == "adv" ]];then
                 --model $MODEL_CLASS \
                 --model_name_or_path $MODEL_NAME_OR_PATH \
                 --adapter_path models/$PEFT/$DEBIAS/$BIAS_TYPE/$DATA/mlm \
-                --adapter_config $PEFT                              
+                --adapter_config $PEFT
         fi
     elif  [[ $METRIC == "stereo" ]];then
         if  [[ $PEFT == "ft" ]];then

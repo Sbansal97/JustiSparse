@@ -12,15 +12,22 @@ PATCH_PATH=$3
 LABEL_COLUMN=$4
 
 if [[ $DATASET == "gab" ]]; then
-  N_EPOCHS=20
-  BS=16
-  LR=1e-4
+  N_EPOCHS=10
+  BS=32
+  LR=2e-5
+  METRIC="eval_f1"
+  CLASS_WEIGHTS="{\"0\":1,\"1\":10}"
+  EVAL_STEPS=1000
 else
   N_EPOCHS=5
   BS=32
   LR=2e-5
+  METRIC="eval_accuracy"
+  EVAL_STEPS=5000
+  CLASS_WEIGHTS="fail"
 fi
 
+mkdir -p models/$DATASET/$PEFT/$DEBIAS_METHOD-none
 
 python run_extrinsic.py \
   --peft $PEFT \
@@ -41,13 +48,14 @@ python run_extrinsic.py \
   --full_ft_max_epochs_per_iteration $N_EPOCHS \
   --sparse_ft_max_epochs_per_iteration $N_EPOCHS \
   --num_train_epochs $N_EPOCHS \
-  --eval_steps 5000 \
-  --save_steps 5000 \
+  --eval_steps $EVAL_STEPS \
+  --save_steps $EVAL_STEPS \
   --evaluation_strategy steps \
   --freeze_layer_norm \
   --learning_rate $LR \
-  --metric_for_best_model eval_accuracy \
+  --metric_for_best_model $METRIC \
   --load_best_model_at_end \
   --eval_split validation \
   --save_total_limit 2 \
-  --log_level debug 
+  --log_level debug \
+  --cls_weights $CLASS_WEIGHTS > models/$DATASET/$PEFT/$DEBIAS_METHOD-none/training.log

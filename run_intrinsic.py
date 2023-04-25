@@ -800,7 +800,7 @@ def main():
                 gender_counterfactual_augmentation,
                 bias_attribute_words=bias_attribute_words,
             )
-        if data_args.counterfactual_augmentation == "group":
+        elif data_args.counterfactual_augmentation == "group":
             counterfactual_augmentation_func = partial(
                 mixed_counterfactual_augmentation,
                 bias_attribute_words=bias_attribute_words,

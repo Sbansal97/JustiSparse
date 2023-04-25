@@ -5,6 +5,7 @@ import random
 
 import numpy as np
 import torch
+import torch.nn as nn
 from tqdm import tqdm
 
 from transformers import Trainer, TrainerCallback
@@ -20,12 +21,16 @@ class PatchLotteryTicketSFTTrainer(LotteryTicketSFTTrainer):
         self,
         *args,
         evaluate_with_patch=False,
+        cls_weights=None,
         **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.evaluate_with_patch = evaluate_with_patch
         self.diffs = None
         self.sft = None
+        self.cls_weights = None
+        if cls_weights is not None:
+            self.cls_weights = torch.tensor(cls_weights).float()
 
     def set_diffs(self, diffs):
         self.diffs = diffs
@@ -38,32 +43,21 @@ class PatchLotteryTicketSFTTrainer(LotteryTicketSFTTrainer):
             if k in self.maskable_params:
                 _mask[k] = v
         self._mask = _mask
+    
+    def compute_loss(self, model, inputs, return_outputs=False):
+        labels = inputs.get("labels")
+        # forward pass
+        outputs = model(**inputs)
+        logits = outputs.get("logits")
+        if self.cls_weights:
+            loss_fct = nn.CrossEntropyLoss(weight=self.cls_weights.to(model.device))
+        else:
+            loss_fct = nn.CrossEntropyLoss()
+        loss = loss_fct(logits.view(-1, self.model.config.num_labels), labels.view(-1))
+        return (loss, outputs) if return_outputs else loss
 
     def training_step(self, *args, **kwargs):
         loss = super().training_step(*args, **kwargs)
-
-        l1_reg = (
-            self.sft_args.sparse_l1_reg
-            if self._masking_enabled
-            else self.sft_args.full_l1_reg
-        )
-        if l1_reg != 0.0 and self.calculate_reg_loss:
-            # Since we only calculate reg loss once per full step.
-            l1_reg *= self.args.gradient_accumulation_steps
-            l1_dists = []
-            for n, p in self.model.named_parameters():
-                if (
-                    p.requires_grad and
-                    (n in self.maskable_params or
-                        not self.sft_args.apply_reg_to_sparse_only)
-                ):
-                    l1_dists.append(
-                        torch.sum(torch.abs(p - self._original_params[n]))
-                    )
-            reg_loss = l1_reg * torch.sum(torch.stack(l1_dists)) / self._num_params
-            reg_loss.backward()
-            self._reg_loss += float(reg_loss)
-            self.calculate_reg_loss = False
 
         if self._masking_enabled:
             # set gradients for non-trainable parametres to zero.

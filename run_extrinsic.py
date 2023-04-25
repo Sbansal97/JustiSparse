@@ -22,6 +22,7 @@ import sys
 from dataclasses import dataclass, field
 from typing import Optional
 
+import evaluate
 import datasets
 import numpy as np
 from datasets import ClassLabel, load_dataset, load_metric
@@ -35,7 +36,6 @@ from transformers import (
     DataCollatorWithPadding,
     EvalPrediction,
     HfArgumentParser,
-    Trainer,
     TrainingArguments,
     default_data_collator,
     set_seed,
@@ -48,7 +48,7 @@ from sft import (
     decode_sparse_tensor
 )
 
-from patch import DebiasArguments, PatchLotteryTicketSFTTrainer, PatchAdapterTrainer
+from patch import DebiasArguments, PatchLotteryTicketSFTTrainer, PatchAdapterTrainer, PatchTrainer
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +61,9 @@ class DataTrainingArguments:
     into argparse arguments to be able to specify them on
     the command line.
     """
+    cls_weights: Optional[str] = field(
+        default=None, metadata={"help": "Class weights for unbalanced datasets."}
+    )
     multisource_data: Optional[str] = field(
         default=None, metadata={"help": "JSON multi-source dataset descriptor."}
     )
@@ -137,6 +140,12 @@ class DataTrainingArguments:
             "value if set."
         },
     )
+
+    def __post_init__(self):
+        try:
+            self.cls_weights = json.loads(self.cls_weights)
+        except Exception as e:
+            self.cls_weights = None
 
 
 @dataclass
@@ -259,7 +268,7 @@ def main():
     )
 
     def get_labels(dataset):
-        label_list = list(set(dataset[data_args.label_column]))
+        label_list = sorted(list(set(dataset[data_args.label_column])))
         return label_list
 
     if training_args.do_predict:
@@ -286,10 +295,13 @@ def main():
             max_train_samples = min(len(train_dataset), data_args.max_train_samples)
             train_dataset = train_dataset.select(range(max_train_samples))
         
-
-
     num_labels = len(label_list)
     label2id = {l: i for i, l in enumerate(label_list)}
+    if data_args.cls_weights is not None:
+        weights = [1]*len(label2id)
+        for label, idx in label2id.items():
+            weights[idx] = data_args.cls_weights[str(label)]
+        data_args.cls_weights = weights
 
     # Load pretrained model and tokenizer
     # In distributed training, the .from_pretrained methods guarantee that only one local process can concurrently
@@ -408,13 +420,17 @@ def main():
             )
     
     # Get the metric function
-    metric = load_metric("glue", "sst2")
+    str_metric = training_args.metric_for_best_model.replace("eval_","")
+    if str_metric != "loss":
+        metric = evaluate.load(str_metric)
 
     # You can define your custom compute_metrics function. It takes an `EvalPrediction` object (a namedtuple with a
     # predictions and label_ids field) and has to return a dictionary string to float.
     def compute_metrics(p: EvalPrediction):
         preds = p.predictions[0] if isinstance(p.predictions, tuple) else p.predictions
         preds = np.argmax(preds, axis=1)
+        if str_metric == "f1":
+            return metric.compute(predictions=preds, references=p.label_ids, average="macro")
         return metric.compute(predictions=preds, references=p.label_ids)
 
     # Data collator will default to DataCollatorWithPadding, so we change it if we already did the padding.
@@ -437,7 +453,7 @@ def main():
 
     # Initialize our Trainer
     if debias_args.debias_configuration == 'none':
-        trainer_cls = Trainer
+        trainer_cls = PatchTrainer
         trainer = trainer_cls(
             model=model,
             args=training_args,
@@ -446,6 +462,7 @@ def main():
             tokenizer=tokenizer,
             data_collator=data_collator,
             compute_metrics=compute_metrics,
+            cls_weights=data_args.cls_weights,
         )
     else:
         if debias_args.peft == 'sft':
@@ -460,7 +477,8 @@ def main():
                 tokenizer=tokenizer,
                 data_collator=data_collator,
                 compute_metrics=compute_metrics,
-                evaluate_with_patch=debias_args.debias_configuration == 'after'
+                evaluate_with_patch=debias_args.debias_configuration == 'after',
+                cls_weights=data_args.cls_weights,
             )
 
             if debias_args.debias_configuration == "after":
@@ -480,7 +498,8 @@ def main():
                         data_collator=data_collator,
                         compute_metrics=compute_metrics,
                         evaluate_with_patch=debias_args.debias_configuration == 'after',
-                        adapter_path=debias_args.patch_path
+                        adapter_path=debias_args.patch_path,
+                        cls_weights=data_args.cls_weights,
                         )
             if debias_args.debias_configuration == 'before':
                 trainer.freeze_adapter()
@@ -525,8 +544,6 @@ def main():
         trainer.log_metrics("eval", metrics)
         trainer.save_metrics("eval", metrics)
 
-    # Prediction
-    # add diffs in after when saving
     if training_args.do_predict:
         logger.info("*** Predict ***")
         predictions, labels, metrics = trainer.predict(predict_dataset, metric_key_prefix="predict")

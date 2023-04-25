@@ -5,6 +5,7 @@ import json
 import random
 import numpy as np
 import torch
+import torch.nn as nn
 from tqdm import tqdm
 
 from transformers import Trainer, TrainerCallback
@@ -21,6 +22,7 @@ class PatchAdapterTrainer(Trainer):
         *args,
         evaluate_with_patch=False,
         adapter_path=None,
+        cls_weights=None,
         **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -28,6 +30,9 @@ class PatchAdapterTrainer(Trainer):
         self.adapter_path = adapter_path
         adapter_config = json.load(open(os.path.join(self.adapter_path,'adapter_config.json')))
         self.adapter_name = adapter_config['name']
+        self.cls_weights = None
+        if cls_weights is not None:
+            self.cls_weights = torch.tensor(cls_weights).float()
 
     def freeze_adapter(self):
         num_frozen = 0
@@ -37,6 +42,18 @@ class PatchAdapterTrainer(Trainer):
                 v.requires_grad = False
         print(f'number of params frozen: {num_frozen}')
 
+    def compute_loss(self, model, inputs, return_outputs=False):
+        labels = inputs.get("labels")
+        # forward pass
+        outputs = model(**inputs)
+        logits = outputs.get("logits")
+        if self.cls_weights:
+            loss_fct = nn.CrossEntropyLoss(weight=self.cls_weights.to(model.device))
+        else:
+            loss_fct = nn.CrossEntropyLoss()
+        loss = loss_fct(logits.view(-1, self.model.config.num_labels), labels.view(-1))
+        return (loss, outputs) if return_outputs else loss
+        
     def _maybe_log_save_evaluate(self, tr_loss, model, trial, epoch, ignore_keys_for_eval):
         if self.control.should_log:
             logs: Dict[str, float] = {}
