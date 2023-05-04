@@ -49,7 +49,7 @@ class PatchLotteryTicketSFTTrainer(LotteryTicketSFTTrainer):
         # forward pass
         outputs = model(**inputs)
         logits = outputs.get("logits")
-        if self.cls_weights:
+        if self.cls_weights is not None:
             loss_fct = nn.CrossEntropyLoss(weight=self.cls_weights.to(model.device))
         else:
             loss_fct = nn.CrossEntropyLoss()

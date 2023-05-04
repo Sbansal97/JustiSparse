@@ -23,6 +23,6 @@ class DebiasArguments:
             if self.peft == 'sft':
                 self.patch_path = os.path.join(self.patch_path, 'pytorch_diff.bin')
                 print(self.patch_path)
-                assert os.path.isfile(self.patch_path)
+                assert os.path.isfile(self.patch_path), self.patch_path
             else:
                 assert os.path.isdir(self.patch_path)

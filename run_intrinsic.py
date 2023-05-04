@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 import random
 import json
+import copy
 
 from functools import partial
 import datasets
@@ -703,7 +704,6 @@ def main():
             max_length=max_seq_length,
         )
 
-
     def mixed_counterfactual_augmentation(examples, bias_attribute_words):
         """Applies racial/religious counterfactual data augmentation to a batch of
         examples.
@@ -781,6 +781,62 @@ def main():
             max_length=max_seq_length,
         )
 
+    def all_counterfactual_augmentation(examples, bias_attribute_words):
+        """Applies racial/religious counterfactual data augmentation to a batch of
+        examples.
+
+        Notes:
+            * We apply CDA after the examples have potentially been grouped.
+            * This implementation can be made more efficient by operating on
+              token IDs as opposed to text. We currently decode each example
+              as it is simpler.
+        """
+        outputs = []
+        w2idx = {}
+        for idx, words in enumerate(bias_attribute_words):
+            for w in words:
+                w2idx[w] = idx
+        augmentation_words = set(w2idx.keys())
+        for input_ids in examples["input_ids"]:
+            # For simplicity, decode each example. It is easier to apply augmentation
+            # on text as opposed to token IDs.
+            sentence = tokenizer.decode(input_ids)
+            words = sentence.split()  # Tokenize based on whitespace.
+            original_sentence = words[:]
+            
+            augmented_sentences = [copy.deepcopy(original_sentence)]
+            all_matches = []
+            for position, word in enumerate(words):
+                if word in augmentation_words:
+                    all_matches.append((position, word))
+
+            if len(all_matches) > 0:
+                position, word = random.choice(all_matches)
+                new_augmented_sentences = []
+                new_words = random.sample(bias_attribute_words[w2idx[word]], 3)
+                for sent in augmented_sentences:
+                    for w in new_words:
+                        new_sentence = copy.deepcopy(sent)
+                        new_sentence[position] = w
+                        new_augmented_sentences.append(new_sentence)
+                augmented_sentences.extend(new_augmented_sentences)
+
+            for sent in augmented_sentences:
+                sent = " ".join(sent)
+                outputs.append(sent)
+
+        # There are potentially no counterfactual examples.
+        if not outputs:
+            return {"input_ids": [], "attention_mask": []}
+        
+        return tokenizer(
+            outputs,
+            return_special_tokens_mask=True,
+            add_special_tokens=False,  # Special tokens are already added.
+            truncation=True,
+            padding=True,
+            max_length=max_seq_length,
+        )
 
 
     if data_args.counterfactual_augmentation is not None:
@@ -802,7 +858,7 @@ def main():
             )
         elif data_args.counterfactual_augmentation == "group":
             counterfactual_augmentation_func = partial(
-                mixed_counterfactual_augmentation,
+                all_counterfactual_augmentation,
                 bias_attribute_words=bias_attribute_words,
             )            
         else:
@@ -818,7 +874,6 @@ def main():
             load_from_cache_file=not data_args.overwrite_cache,
             desc=f"Applying counterfactual augmentation",
         )
-
 
     if training_args.do_train:
         if "train" not in tokenized_datasets:

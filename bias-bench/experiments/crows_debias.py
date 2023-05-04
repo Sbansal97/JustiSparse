@@ -91,7 +91,7 @@ parser.add_argument(
     "--bias_type",
     action="store",
     default="gender",
-    choices=["gender", "race", "religion"],
+    choices=["gender", "race", "religion","sexual-orientation"],
     help="Determines which CrowS-Pairs dataset split to evaluate against.",
 )
 
@@ -132,7 +132,8 @@ if __name__ == "__main__":
     )
     if args.adapter_path:
         model.load_adapter(args.adapter_path, config=args.adapter_config)
-        model.set_active_adapters("mlm")                          
+        model.set_active_adapters("class")                          
+        #model.set_active_adapters("mlm")                          
                           
     if _is_self_debias(args.model):
         model._model.eval()

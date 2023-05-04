@@ -52,7 +52,8 @@ from transformers.adapters import AdapterArguments, setup_adapter_training
 from adversarial import (
     RegArguments,
     AdvBertForSequenceClassification,
-    AdvAdapterTrainer
+    AdvAdapterTrainer,
+    AdvLotteryTicketSFTTrainer
 )
 
 logger = logging.getLogger(__name__)
@@ -99,7 +100,9 @@ class DataTrainingArguments:
         default=None,
         metadata={"help": "Column name containing protected attribute ."},
     )
-
+    peft: Optional[str] = field(
+        default='sft', metadata={"help": "Default peft technique to use."}
+    )
     eval_split: Optional[str] = field(
         default='validation', metadata={"help": "The split to evaluate on."}
     )
@@ -408,18 +411,43 @@ def main():
 
 
     # Initialize our Trainer
-    trainer_cls = AdvAdapterTrainer
-    setup_adapter_training(model, adapter_args, "class")
-    trainer = trainer_cls(
-        model=model,
-        args=training_args,
-        reg_args=reg_args,
-        train_dataset=train_dataset if training_args.do_train else None,
-        eval_dataset=eval_dataset if training_args.do_eval else None,
-        tokenizer=tokenizer,
-        data_collator=data_collator,
-        compute_metrics=compute_metrics,
-    )
+    if data_args.peft == 'sft':
+
+        if sft_args.freeze_layer_norm:
+            for n, p in model.named_parameters():
+                if 'LayerNorm' in n:
+                    p.requires_grad = False
+
+        maskable_params = [
+            n for n, p in model.named_parameters()
+            if n.startswith(model.base_model_prefix) and p.requires_grad
+        ]
+        # Initialize our Trainer
+        trainer = AdvLotteryTicketSFTTrainer(
+            sft_args=sft_args,
+            reg_args=reg_args,
+            maskable_params=maskable_params,
+            model=model,
+            args=training_args,
+            train_dataset=train_dataset if training_args.do_train else None,
+            eval_dataset=eval_dataset if training_args.do_eval else None,
+            tokenizer=tokenizer,
+            data_collator=data_collator
+        )
+
+    else:
+        trainer_cls = AdvAdapterTrainer
+        setup_adapter_training(model, adapter_args, "class")
+        trainer = trainer_cls(
+            model=model,
+            args=training_args,
+            reg_args=reg_args,
+            train_dataset=train_dataset if training_args.do_train else None,
+            eval_dataset=eval_dataset if training_args.do_eval else None,
+            tokenizer=tokenizer,
+            data_collator=data_collator,
+            compute_metrics=compute_metrics,
+        )
 
     # Training
     if training_args.do_train:
@@ -443,8 +471,8 @@ def main():
         trainer.save_metrics("train", metrics)
         trainer.save_state()
 
-        if training_args.local_rank <= 0:
-            trainer.save_model(training_args.output_dir)
+        if training_args.local_rank <= 0 and data_args.peft == 'sft':
+            trainer.sft().save(training_args.output_dir)
 
     # Evaluation
     if training_args.do_eval:

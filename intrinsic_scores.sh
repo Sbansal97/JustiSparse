@@ -11,6 +11,8 @@ if [[ $BIAS_TYPE == "gender" ]];then
 elif [[ $BIAS_TYPE == "group" ]];then
     DATA=gab
     BIAS_CATEG=race
+    # BIAS_CATEG=religion
+    # BIAS_CATEG=sexual-orientation    
 fi
 
 if [[ $DEBIAS == "orig" ]];then
@@ -36,10 +38,10 @@ if [[ $DEBIAS == "orig" ]];then
     else 
         echo "Metric Not Impemented"
     fi
-elif [[ $DEBIAS == "cda" ]];then    
+elif [[ $DEBIAS == "cda" ]];then
     MODEL_NAME_OR_PATH=bert-base-uncased
     MODEL_CLASS=CDABertForMaskedLM
-    if  [[ $METRIC == "crows" ]];then        
+    if  [[ $METRIC == "crows" ]];then
         if  [[ $PEFT == "ft" ]];then
             python bias-bench/experiments/crows_debias.py \
                 --bias_type $BIAS_CATEG \
@@ -56,10 +58,8 @@ elif [[ $DEBIAS == "cda" ]];then
             python bias-bench/experiments/crows_debias.py \
                 --bias_type $BIAS_CATEG \
                 --model $MODEL_CLASS \
-                --model_name_or_path $MODEL_NAME_OR_PATH \
-                --adapter_path models/prefix_tuning_flat/cda/gender/bias-bios/checkpoint-1000/mlm \
-                --adapter_config $PEFT            
-            # --adapter_path models/$PEFT/$DEBIAS/$BIAS_TYPE/$DATA/mlm \                
+                --adapter_path models/$PEFT/$DEBIAS/$BIAS_TYPE/$DATA/mlm \
+                --adapter_config $PEFT
         fi
     elif  [[ $METRIC == "stereo" ]];then
         if  [[ $PEFT == "ft" ]];then
@@ -84,7 +84,7 @@ elif [[ $DEBIAS == "cda" ]];then
         fi   
         python bias-bench/experiments/stereoset_evaluation.py \
             --persistent_dir bias-bench \
-            --predictions_file bias-bench/results/stereoset/stereoset_m-${MODEL_CLASS}_c-${MODEL_NAME_OR_PATH}.json                                 
+            --predictions_file bias-bench/results/stereoset/stereoset_m-${MODEL_CLASS}_c-${MODEL_NAME_OR_PATH}.json
     else 
         echo "Metric Not Impemented"
     fi
@@ -97,19 +97,19 @@ elif [[ $DEBIAS == "adv" ]];then
                 --bias_type $BIAS_TYPE \
                 --model $MODEL_CLASS \
                 --model_name_or_path $MODEL_NAME_OR_PATH \
-                --load_path models/sft/$DEBIAS/$BIAS_TYPE/$DATA
+                --load_path models/sft/$DEBIAS/$BIAS_TYPE/$DATA/only-adv
         elif  [[ $PEFT == "sft" ]];then
             python bias-bench/experiments/crows_debias.py \
                 --bias_type $BIAS_TYPE \
                 --model $MODEL_CLASS \
                 --model_name_or_path $MODEL_NAME_OR_PATH \
-                --load_path models/$PEFT/$DEBIAS/$BIAS_TYPE/$DATA/$PEFT  
+                --load_path models/$PEFT/$DEBIAS/$BIAS_TYPE/$DATA/only-adv/$PEFT/checkpoint-10000
         else
             python bias-bench/experiments/crows_debias.py \
                 --bias_type $BIAS_TYPE \
                 --model $MODEL_CLASS \
                 --model_name_or_path $MODEL_NAME_OR_PATH \
-                --adapter_path models/$PEFT/$DEBIAS/$BIAS_TYPE/$DATA/mlm \
+                --adapter_path models/$PEFT/$DEBIAS/$BIAS_TYPE/$DATA/only-adv/class \
                 --adapter_config $PEFT
         fi
     elif  [[ $METRIC == "stereo" ]];then
@@ -117,19 +117,19 @@ elif [[ $DEBIAS == "adv" ]];then
             python bias-bench/experiments/stereoset_debias.py \
                 --model $MODEL_CLASS \
                 --model_name_or_path $MODEL_NAME_OR_PATH \
-                --load_path models/sft/$DEBIAS/$BIAS_TYPE/$DATA \
+                --load_path models/sft/$DEBIAS/$BIAS_TYPE/$DATA/only-adv \
                 --batch_size 128
         elif  [[ $PEFT == "sft" ]];then
             python bias-bench/experiments/stereoset_debias.py \
                 --model $MODEL_CLASS \
                 --model_name_or_path $MODEL_NAME_OR_PATH \
-                --load_path models/$PEFT/$DEBIAS/$BIAS_TYPE/$DATA/$PEFT \
+                --load_path models/$PEFT/$DEBIAS/$BIAS_TYPE/$DATA/only-adv/$PEFT/ \
                 --batch_size 128
         else
             python bias-bench/experiments/stereoset_debias.py \
                 --model $MODEL_CLASS \
                 --model_name_or_path $MODEL_NAME_OR_PATH \
-                --adapter_path models/$PEFT/$DEBIAS/$BIAS_TYPE/$DATA/mlm \
+                --adapter_path models/$PEFT/$DEBIAS/$BIAS_TYPE/$DATA/only-adv/class \
                 --adapter_config $PEFT \
                 --batch_size 128
         fi   

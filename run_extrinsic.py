@@ -140,6 +140,9 @@ class DataTrainingArguments:
             "value if set."
         },
     )
+    save_prefix: str =  field(
+        default=''
+    )
 
     def __post_init__(self):
         try:
@@ -366,6 +369,8 @@ def main():
                 mask[k] = v_mask
         elif debias_args.peft is not None and debias_args.debias_configuration == 'before':
             model.load_adapter(debias_args.patch_path)
+            adapter_config = json.load(open(os.path.join(debias_args.patch_path,'adapter_config.json')))
+            model.set_active_adapters(adapter_config['name'])
 
     # Preprocessing the datasets
     # Padding strategy
@@ -536,7 +541,16 @@ def main():
     # Evaluation
     if training_args.do_eval:
         logger.info("*** Evaluate ***")
-        metrics = trainer.evaluate(eval_dataset=eval_dataset)
+        if debias_args.peft != 'sft' and debias_args.debias_configuration == 'after':
+            model = trainer.model
+            model.load_adapter(trainer.adapter_path)
+            model.set_active_adapters(trainer.adapter_name)
+            model.to(model.device)
+            trainer.model = model
+            metrics = trainer.evaluate(eval_dataset=eval_dataset)
+            trainer.model.delete_adapter(trainer.adapter_name)
+        else:
+            metrics = trainer.evaluate(eval_dataset=eval_dataset)
 
         max_eval_samples = data_args.max_eval_samples if data_args.max_eval_samples is not None else len(eval_dataset)
         metrics["eval_samples"] = min(max_eval_samples, len(eval_dataset))
@@ -546,18 +560,38 @@ def main():
 
     if training_args.do_predict:
         logger.info("*** Predict ***")
-        predictions, labels, metrics = trainer.predict(predict_dataset, metric_key_prefix="predict")
+        if debias_args.peft != 'sft' and debias_args.debias_configuration == 'after':
+            model = trainer.model
+            model.load_adapter(trainer.adapter_path)
+            model.set_active_adapters(trainer.adapter_name)
+            model.to(model.device)
+            trainer.model = model
+            predictions, labels, metrics = trainer.predict(predict_dataset, metric_key_prefix="predict")
+            trainer.model.delete_adapter(trainer.adapter_name)
+        else:
+            predictions, labels, metrics = trainer.predict(predict_dataset, metric_key_prefix="predict")
+        
 
         max_predict_samples = (
             data_args.max_predict_samples if data_args.max_predict_samples is not None else len(predict_dataset)
         )
         metrics["predict_samples"] = max_predict_samples
         
-        trainer.log_metrics("predict", metrics)
-        trainer.save_metrics("predict", metrics)
+        if data_args.save_prefix == '':
+            pref = 'predict'
+        else:
+            pref = f'predict_{data_args.save_prefix}'
+
+        trainer.log_metrics(pref, metrics)
+        trainer.save_metrics(pref, metrics)
 
         predictions = np.argmax(predictions, axis=1)
-        output_predict_file = os.path.join(training_args.output_dir, "predictions.txt")
+        if data_args.save_prefix == '':
+            pred_output_path = 'predictions.txt'
+        else:
+            pred_output_path = f'predictions_{data_args.save_prefix}.txt'
+
+        output_predict_file = os.path.join(training_args.output_dir, pred_output_path)
         if trainer.is_world_process_zero():
             with open(output_predict_file, "w") as writer:
                 writer.write("index\tprediction\n")

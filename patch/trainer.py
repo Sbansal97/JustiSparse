@@ -33,10 +33,9 @@ class PatchTrainer(Trainer):
         # forward pass
         outputs = model(**inputs)
         logits = outputs.get("logits")
-        if self.cls_weights:
+        if self.cls_weights is not None:
             loss_fct = nn.CrossEntropyLoss(weight=self.cls_weights.to(model.device))
         else:
             loss_fct = nn.CrossEntropyLoss()
-        loss_fct = nn.CrossEntropyLoss(weight=self.cls_weights.to(model.device))
         loss = loss_fct(logits.view(-1, self.model.config.num_labels), labels.view(-1))
         return (loss, outputs) if return_outputs else loss

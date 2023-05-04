@@ -15,6 +15,8 @@ from typing import Dict
 
 logger = logging.getLogger(__name__)
 
+# AdapterTrainer
+
 class PatchAdapterTrainer(Trainer):
     
     def __init__(
@@ -47,7 +49,7 @@ class PatchAdapterTrainer(Trainer):
         # forward pass
         outputs = model(**inputs)
         logits = outputs.get("logits")
-        if self.cls_weights:
+        if self.cls_weights is not None:
             loss_fct = nn.CrossEntropyLoss(weight=self.cls_weights.to(model.device))
         else:
             loss_fct = nn.CrossEntropyLoss()
@@ -73,7 +75,10 @@ class PatchAdapterTrainer(Trainer):
         metrics = None
         if self.control.should_evaluate:
             if self.evaluate_with_patch:
+                device = self.model.device
                 self.model.load_adapter(self.adapter_path)
+                self.model.set_active_adapters(self.adapter_name)
+                self.model.to(device)
                 metrics = self.evaluate(ignore_keys=ignore_keys_for_eval)
                 self._report_to_hp_search(trial, epoch, metrics)
                 self.model.delete_adapter(self.adapter_name)

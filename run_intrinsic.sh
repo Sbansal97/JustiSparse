@@ -37,7 +37,7 @@ if [[ $DEBIAS == "cda" ]];then
             --overwrite_output_dir \
             --learning_rate 5e-5 \
             --evaluation_strategy steps \
-            --max_steps 10000 \
+            --max_steps 20000 \
             --eval_steps 1000 \
             --train_adapter \
             --peft ${PEFT} \
@@ -46,10 +46,10 @@ if [[ $DEBIAS == "cda" ]];then
             --freeze_decoder \
             --full_l1_reg 0.1 \
             --sparse_l1_reg 0.1 \
-            --full_ft_min_steps_per_iteration 10000 \
-            --sparse_ft_min_steps_per_iteration 10000 \
-            --full_ft_max_steps_per_iteration 10000 \
-            --sparse_ft_max_steps_per_iteration 10000 \
+            --full_ft_min_steps_per_iteration 20000 \
+            --sparse_ft_min_steps_per_iteration 20000 \
+            --full_ft_max_steps_per_iteration 20000 \
+            --sparse_ft_max_steps_per_iteration 20000 \
             --counterfactual_augmentation ${AXIS} \
             --adapter_config ${PEFT} \
             --load_best_model_at_end > models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET}/training.log
@@ -71,14 +71,14 @@ if [[ $DEBIAS == "cda" ]];then
             --overwrite_output_dir \
             --learning_rate 5e-5 \
             --evaluation_strategy steps \
-            --max_steps 10000 \
+            --max_steps 20000 \
             --eval_steps 1000 \
             --train_adapter \
             --peft ${PEFT} \
             --cache_dir $cache_dir \
             --counterfactual_augmentation ${AXIS} \
             --adapter_config ${PEFT} \
-            --load_best_model_at_end > models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET}/training.log
+            --load_best_model_at_end  > models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET}/training.log
     fi
 elif [[ $DEBIAS == "adv" ]];then
     if [[ $PEFT == "sft" ]];then
