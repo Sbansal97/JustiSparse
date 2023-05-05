@@ -22,6 +22,7 @@ from typing import Optional
 import random
 import json
 import copy
+from collections import defaultdict
 
 from functools import partial
 import datasets
@@ -780,7 +781,6 @@ def main():
             padding=True,
             max_length=max_seq_length,
         )
-
     def all_counterfactual_augmentation(examples, bias_attribute_words):
         """Applies racial/religious counterfactual data augmentation to a batch of
         examples.
@@ -797,6 +797,7 @@ def main():
             for w in words:
                 w2idx[w] = idx
         augmentation_words = set(w2idx.keys())
+        
         for input_ids in examples["input_ids"]:
             # For simplicity, decode each example. It is easier to apply augmentation
             # on text as opposed to token IDs.
@@ -805,25 +806,67 @@ def main():
             original_sentence = words[:]
             
             augmented_sentences = [copy.deepcopy(original_sentence)]
-            all_matches = []
+            # all_matches = []
+            # for position, word in enumerate(words):
+            #     if word in augmentation_words:
+            #         all_matches.append((position, word))
+
+            # if len(all_matches) > 0:
+            #     position, word = random.choice(all_matches)
+            #     new_augmented_sentences = []
+            #     sample_words = copy.deepcopy(bias_attribute_words[w2idx[word]])
+            #     sample_words.remove(word)
+            #     new_words = random.sample(sample_words, min(len(sample_words), 3))
+            #     for sent in augmented_sentences:
+            #         for w in new_words:
+            #             new_sentence = copy.deepcopy(sent)
+            #             new_sentence[position] = w
+            #             new_augmented_sentences.append(new_sentence)
+            #     augmented_sentences.extend(new_augmented_sentences)
+
+            #     for sent in augmented_sentences:
+            #         sent = " ".join(sent)
+            #         outputs.append(sent)
+
+            all_matches = defaultdict(list)
             for position, word in enumerate(words):
                 if word in augmentation_words:
-                    all_matches.append((position, word))
+                    all_matches[word].append(position)
 
+            # gay 0 2
+            # muslim 4 6
+            # gay, muslim
+            # [[0,2], [4,6]]
+            # [[words_gay], [words_muslim]
+        
+
+            def get_stats(all_matches):
+                    words = []
+                    sample_words = []
+                    positions = []
+                    for word in all_matches:
+                        words.append(word)
+                        positions.append(all_matches[word])
+                        sample = copy.deepcopy(bias_attribute_words[w2idx[word]])
+                        sample.remove(word)
+                        sample_words.append(sample)
+                        return words, positions, sample_words
+            
             if len(all_matches) > 0:
-                position, word = random.choice(all_matches)
-                new_augmented_sentences = []
-                new_words = random.sample(bias_attribute_words[w2idx[word]], 3)
-                for sent in augmented_sentences:
-                    for w in new_words:
-                        new_sentence = copy.deepcopy(sent)
-                        new_sentence[position] = w
-                        new_augmented_sentences.append(new_sentence)
-                augmented_sentences.extend(new_augmented_sentences)
+            
+                words, positions, sample_words = get_stats(all_matches)
 
-            for sent in augmented_sentences:
-                sent = " ".join(sent)
-                outputs.append(sent)
+                for word, pos, sample in zip(words, positions, sample_words):
+                    new_words = sample
+                    for w in new_words:
+                        new_sentence = copy.deepcopy(original_sentence)
+                        for position in pos:
+                            new_sentence[position] = w
+                        augmented_sentences.append(new_sentence)
+
+                for sent in augmented_sentences:
+                    sent = " ".join(sent)
+                    outputs.append(sent)
 
         # There are potentially no counterfactual examples.
         if not outputs:

@@ -2,6 +2,7 @@ import json
 import random
 
 import nltk
+from datasets import load_dataset
 from tqdm import tqdm
 
 
@@ -45,8 +46,30 @@ def _load_gender_data(persistent_dir):
     count_female_sentences = 0
     count_neutral_sentences = 0
 
-    with open(f"{persistent_dir}/data/text/wikipedia-2.5.txt", "r") as f:
-        lines = f.readlines()
+    train_file = 'data/bias-bios/train.jsonl'
+    validation_file = 'data/bias-bios/validation.jsonl'
+
+    data_files = {}
+    if train_file is not None:
+        data_files["train"] = train_file
+        extension = train_file.split(".")[-1]
+    if validation_file is not None:
+        data_files["validation"] = validation_file
+        extension = validation_file.split(".")[-1]
+    if extension == "txt":
+        extension = "text"
+    if extension == 'jsonl':
+        extension = 'json'
+    raw_datasets = load_dataset(
+        extension,
+        data_files=data_files,
+        )
+
+    lines = raw_datasets['train']['text']   
+
+    # with open(f"{persistent_dir}/data/text/wikipedia-2.5.txt", "r") as f:
+    #     lines = f.readlines()
+
     random.shuffle(lines)
 
     for line in tqdm(lines, desc="Loading INLP data"):
@@ -125,7 +148,10 @@ def _load_gender_data(persistent_dir):
             print(f" - Num. female sentences: {count_female_sentences}")
             print(f" - Num. neutral sentences: {count_neutral_sentences}")
             break
-
+    
+    import pdb 
+    pdb.set_trace()
+    
     data = {
         "male": male_sentences_clipped,
         "female": female_sentences_clipped,

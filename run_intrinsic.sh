@@ -1,8 +1,8 @@
 PEFT=$1
 GPU_ID=$2
 DEBIAS=$3
-AXIS=$4 # gender, group
-DATASET=$5 # bias-bios, gab
+AXIS=$4 # gender, group, dialect
+DATASET=$5 # bias-bios, gab, fdcl
 
 cache_dir=~/.cache
 train_path=data/${DATASET}/train.jsonl
@@ -12,6 +12,8 @@ export CUDA_VISIBLE_DEVICES=$GPU_ID
 if [[ $AXIS == "gender" ]];then
     attr='g'
 elif [[ $AXIS == "group" ]];then
+    attr='t'
+elif [[ $AXIS == "dialect" ]];then
     attr='t'
 fi
 
@@ -78,7 +80,7 @@ if [[ $DEBIAS == "cda" ]];then
             --cache_dir $cache_dir \
             --counterfactual_augmentation ${AXIS} \
             --adapter_config ${PEFT} \
-            --load_best_model_at_end  > models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET}/training.log
+            --load_best_model_at_end # > models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET}/training.log
     fi
 elif [[ $DEBIAS == "adv" ]];then
     if [[ $PEFT == "sft" ]];then

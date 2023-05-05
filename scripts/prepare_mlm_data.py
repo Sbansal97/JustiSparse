@@ -1,8 +1,10 @@
 from datasets import load_dataset
 import os
 import sys
+import pandas as pd
+import json
 import argparse
-
+from preprocessing import Preprocessing_Tweet
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -31,7 +33,47 @@ def get_mlm():
         valid_texts = list(dataset['validation']['text'])
         test_texts = list(dataset['test']['text'])
 
+    elif args.dataset_name == 'ws':
+        for split in ['train', 'dev', 'test']:
+            new_data = []
+            data = pd.read_csv(f'../data/ws/{split}.tsv' ,sep='\t')
+            data['text'] = data['text'].map(Preprocessing_Tweet)
 
+            if split == 'dev':
+                split = 'validation'
+
+            for i in range(len(data)) :
+                text = data.iloc[i]['text']
+                if len(text) > 0:
+                    new_data.append({'text': text , 'label' : int(data.iloc[i]['is_hate'])})
+            with open(f'../data/ws/{split}.jsonl','w') as fp:
+                for item in new_data:
+                    fp.write("%s\n" % json.dumps(item))   
+
+    elif args.dataset_name == 'fdcl-new':
+        for split in ['trn','dev','tst']:
+            new_data = []
+            data = pd.read_csv(f'../data/fdcl/toxic_lang_data_pub/ND_founta_{split}_dial_pAPI.csv')
+            filtered_data = data[['id','tweet','dialect_argmax','ND_label']]
+            filtered_data = filtered_data.rename(columns={"tweet": "text"})
+            filtered_data = filtered_data.rename(columns={"dialect_argmax": "t"})
+            filtered_data['text'] = filtered_data['text'].map(Preprocessing_Tweet)
+
+            if split=='trn':
+                split='train'
+            elif split == 'dev':
+                split = 'validation'
+            elif split == 'tst':
+                split = 'test'
+
+            filtered_data.to_json(f'../data/fdcl/{split}.jsonl', orient='records', lines=True)
+
+
+            # for i in range(len(data)) :
+            #     text = data.iloc[i]['text']
+            #     if len(text) > 0:
+            #         new_data.append({'text': text , 'label' : int(data.iloc[i]['is_hate'])})
+                    
     elif args.dataset_name == 'ontonotes':        
         dataset = load_dataset("conll2012_ontonotesv5", "english_v12")
         import pdb
@@ -50,7 +92,7 @@ def get_mlm():
         raise NotImplementedError
 
 
-    print (f"length : train {len(train_texts)}, val : {len(valid_texts)}, test : {len(test_texts)}")
+    # print (f"length : train {len(train_texts)}, val : {len(valid_texts)}, test : {len(test_texts)}")
 
     # data_dir = os.path.join('data', args.dataset_name, 'mlm')
     # os.makedirs(data_dir, exist_ok=True)

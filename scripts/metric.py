@@ -17,10 +17,8 @@ from collections import defaultdict
 # pdb.set_trace()
 
  
-def calc_FPRD_gab(peft = 'pfeiffer', loc = 'none', extrinsic=False):
+def calc_FPRD_gab(peft = 'pfeiffer', debias = 'cda', loc = 'none', extrinsic=False):
     dataset = 'gab'
-    debias = 'cda'
-
     if extrinsic:
         pred = [item.strip().split('\t') for item in open(f'models/{dataset}/{peft}/{debias}-{loc}/predictions_iptts.txt','r').readlines()][1:]
     else:
@@ -88,10 +86,8 @@ def calc_FPRD_gab(peft = 'pfeiffer', loc = 'none', extrinsic=False):
         print (dataset, peft, debias, loc, " FPRD : ", FPRD)
 
 
-def calc_FPRD_bios(peft = 'pfeiffer', loc = 'none'):
+def calc_FPRD_bios(peft = 'pfeiffer', debias = 'cda', loc = 'none'):
     dataset = 'bias-bios'
-    debias = 'cda'
-
     _tpr = defaultdict(lambda : {'m' : [], 'f' : []})
 
     pred = [item.strip().split('\t') for item in open(f'models/{dataset}/{peft}/{debias}-{loc}/predictions.txt','r').readlines()][1:]
@@ -122,11 +118,11 @@ def calc_FPRD_bios(peft = 'pfeiffer', loc = 'none'):
 
 
 def main():
-    dataset, peft, loc = sys.argv[1], sys.argv[2], sys.argv[3]
+    dataset, peft, loc, debias = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
     if dataset=='gab':
-        calc_FPRD_gab(peft=peft, loc=loc, extrinsic=True) # True for Ipitt and False for in-dmoain FPRD
+        calc_FPRD_gab(peft=peft, loc=loc, debias=debias, extrinsic=True) # True for Ipitt and False for in-dmoain FPRD
     else:
-        calc_FPRD_bios(peft=peft, loc=loc)
+        calc_FPRD_bios(peft=peft, debias=debias, loc=loc)
 
 main()
 

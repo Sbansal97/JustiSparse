@@ -99,12 +99,16 @@ class AdvBertForSequenceClassification(BertForSequenceClassification):
                 loss += adv_loss * reg_args.adv_strength
 
         if not return_dict:
-            output = (logits,) + outputs[2:]
+            output = outputs[2:]
+            if self.finteune:
+                output = (logits,) + output
+            if self.adv_debias:
+                output = (attr_logits,) + output
             return ((loss,) + output) if loss is not None else output
         
         return AdvSequenceClassifierOutput(
             loss=loss,
-            logits=logits
+            logits=attr_logits
         )
 
 

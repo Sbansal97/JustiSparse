@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 from transformers.trainer_pt_utils import get_parameter_names
 from transformers.pytorch_utils import ALL_LAYERNORM_LAYERS
-
+from transformers.trainer_utils import PREFIX_CHECKPOINT_DIR
 
 class _RegLossCalculationCallback(TrainerCallback):
 
@@ -234,6 +234,11 @@ class SFTTrainer(Trainer):
 
         if self.control.should_save:
             self._save_checkpoint(model, trial, metrics=metrics)
+            checkpoint_folder = f"{PREFIX_CHECKPOINT_DIR}-{self.state.global_step}"
+            run_dir = self._get_output_dir(trial = trial)
+            output_dir = os.path.join(run_dir, checkpoint_folder)
+            if self.args.local_rank <= 0:
+                self.sft().save(output_dir)
             self.control = self.callback_handler.on_save(self.args, self.state, self.control)
 
 class LotteryTicketSFTTrainer(SFTTrainer):

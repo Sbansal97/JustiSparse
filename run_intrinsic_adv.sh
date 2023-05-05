@@ -1,4 +1,4 @@
-PEFT=$1
+PEFT=$1 # pfeiffer, prefix_tuning_flat, lora, sft
 GPU_ID=$2
 DEBIAS=$3
 AXIS=$4 # gender, group
@@ -13,18 +13,20 @@ if [[ $AXIS == "gender" ]];then
     attr='g'
 elif [[ $AXIS == "group" ]];then
     attr='t'
+elif [[ $AXIS == "dialect" ]];then
+    attr='t'
 fi
 
-mkdir -p models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET}/only-adv
+mkdir -p models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET}
 
 if [[ $PEFT == "sft" ]];then
     python run_adversarial.py \
         --model_name_or_path bert-base-uncased \
         --protected_attribute_column $attr \
-        --label_column p \
+        --label_column $attr \
         --train_file $train_path \
         --validation_file $val_path \
-        --output_dir models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET}/only-adv \
+        --output_dir models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET} \
         --do_train \
         --do_eval \
         --log_level 'info' \
@@ -39,27 +41,30 @@ if [[ $PEFT == "sft" ]];then
         --evaluation_strategy steps \
         --max_grad_norm 1.0 \
         --weight_decay 0.0 \
-        --max_steps 20000 \
+        --max_steps 10000 \
         --eval_steps 1000 \
         --peft $PEFT \
         --cache_dir $cache_dir \
         --freeze_layer_norm \
         --full_l1_reg 0.1 \
         --sparse_l1_reg 0.1 \
-        --full_ft_min_steps_per_iteration 20000 \
-        --sparse_ft_min_steps_per_iteration 20000 \
-        --full_ft_max_steps_per_iteration 20000 \
-        --sparse_ft_max_steps_per_iteration 20000 \
+        --full_ft_min_steps_per_iteration 10000 \
+        --sparse_ft_min_steps_per_iteration 10000 \
+        --full_ft_max_steps_per_iteration 10000 \
+        --sparse_ft_max_steps_per_iteration 10000 \
         --adv_debias \
-        --load_best_model_at_end  > models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET}/only-adv/training.log
+        --log_level debug \
+        --metric_for_best_model eval_accuracy \
+        --greater_is_better False \
+        --load_best_model_at_end > models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET}/training.log
 else
     python run_adversarial.py \
         --model_name_or_path bert-base-uncased \
         --protected_attribute_column $attr \
-        --label_column p \
+        --label_column $attr \
         --train_file $train_path \
         --validation_file $val_path \
-        --output_dir models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET}/only-adv \
+        --output_dir models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET} \
         --do_train \
         --do_eval \
         --log_level 'info' \
@@ -74,12 +79,15 @@ else
         --evaluation_strategy steps \
         --max_grad_norm 1.0 \
         --weight_decay 0.0 \
-        --max_steps 20000 \
+        --max_steps 10000 \
         --eval_steps 1000 \
         --adapter_config $PEFT \
         --peft $PEFT \
         --cache_dir $cache_dir \
         --train_adapter \
+        --log_level debug \
         --adv_debias \
-        --load_best_model_at_end  > models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET}/only-adv/training.log
+        --metric_for_best_model eval_accuracy \
+        --greater_is_better False \
+        --load_best_model_at_end  > models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET}/training.log
 fi

@@ -285,6 +285,7 @@ def main():
             protected_attribute_list = list(set(raw_datasets["validation"][data_args.protected_attribute_column]))
             protected_attribute2id = {l: i for i, l in enumerate(protected_attribute_list)}
 
+    logger.info(f"Protected attribues: {protected_attribute2id}")
     if reg_args.adv_debias :
         reg_args.adv_attr_dim = len(protected_attribute2id)
 
@@ -351,13 +352,18 @@ def main():
             max_length=data_args.max_seq_length,
             truncation=True,
         )
+        
         if reg_args.adv_debias:
-                protected_attributes = [protected_attribute2id[i] for i in examples[data_args.protected_attribute_column]]
-                tokenized_examples['attr'] = protected_attributes
-        tokenized_examples['label'] = [
-            label2id.get(label, label)
-            for label in examples[data_args.label_column]
-        ]
+            protected_attributes = [protected_attribute2id[i] for i in examples[data_args.protected_attribute_column]]
+            tokenized_examples['attr'] = protected_attributes
+            tokenized_examples['label'] = protected_attributes
+        
+        if reg_args.finetune:
+            tokenized_examples['label'] = [
+                label2id.get(label, label)
+                for label in examples[data_args.label_column]
+            ]
+            
         return tokenized_examples
 
     if training_args.do_train:
@@ -432,7 +438,8 @@ def main():
             train_dataset=train_dataset if training_args.do_train else None,
             eval_dataset=eval_dataset if training_args.do_eval else None,
             tokenizer=tokenizer,
-            data_collator=data_collator
+            data_collator=data_collator,
+            compute_metrics=compute_metrics
         )
 
     else:
