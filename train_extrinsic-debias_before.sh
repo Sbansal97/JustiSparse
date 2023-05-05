@@ -19,6 +19,14 @@ if [[ $DATASET == "gab" ]]; then
   METRIC="eval_f1"
   CLASS_WEIGHTS="{\"0\":1,\"1\":10}"
   EVAL_STEPS=1000
+elif [[ $DATASET == "fdcl" ]]; then
+  N_EPOCHS=10
+  BS=32
+  LR=2e-5
+  METRIC="eval_f1"
+  # CLASS_WEIGHTS="{\"0\":1,\"1\":10}"
+  CLASS_WEIGHTS="fail"
+  EVAL_STEPS=1000
 else
   N_EPOCHS=5
   BS=32
