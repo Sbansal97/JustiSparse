@@ -148,10 +148,7 @@ def _load_gender_data(persistent_dir):
             print(f" - Num. female sentences: {count_female_sentences}")
             print(f" - Num. neutral sentences: {count_neutral_sentences}")
             break
-    
-    import pdb 
-    pdb.set_trace()
-    
+        
     data = {
         "male": male_sentences_clipped,
         "female": female_sentences_clipped,

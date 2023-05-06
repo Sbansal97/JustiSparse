@@ -2,19 +2,23 @@ PEFT=$1
 GPU_ID=$2
 DEBIAS=$3
 AXIS=$4 # gender, group, dialect
-DATASET=$5 # bias-bios, gab, fdcl
+DATASET=$5 # bias-bios, gab, fdcl ws
 
 cache_dir=~/.cache
 train_path=data/${DATASET}/train.jsonl
 val_path=data/${DATASET}/validation.jsonl
 export CUDA_VISIBLE_DEVICES=$GPU_ID
 
+
 if [[ $AXIS == "gender" ]];then
     attr='g'
+    bs=128
 elif [[ $AXIS == "group" ]];then
     attr='t'
+    bs=32
 elif [[ $AXIS == "dialect" ]];then
     attr='t'
+    bs=32
 fi
 
 mkdir -p models/${PEFT}/${DEBIAS}/${AXIS}/${DATASET}
@@ -31,7 +35,7 @@ if [[ $DEBIAS == "cda" ]];then
             --do_eval \
             --log_level 'info' \
             --preprocessing_num_workers 4 \
-            --per_device_train_batch_size 128 \
+            --per_device_train_batch_size $bs \
             --per_device_eval_batch_size 128 \
             --gradient_accumulation_steps 1 \
             --max_seq_length 256 \
@@ -65,8 +69,8 @@ if [[ $DEBIAS == "cda" ]];then
             --do_eval \
             --log_level 'info' \
             --preprocessing_num_workers 4 \
-            --per_device_train_batch_size 128 \
-            --per_device_eval_batch_size 128 \
+            --per_device_train_batch_size $bs \
+            --per_device_eval_batch_size $bs \
             --gradient_accumulation_steps 1 \
             --max_seq_length 256 \
             --save_steps 1000 \

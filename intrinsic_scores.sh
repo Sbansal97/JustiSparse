@@ -4,7 +4,6 @@ DEBIAS=$1       # "orig", "cda" , "adv"
 BIAS_TYPE=$2    # "gender", "race"
 METRIC=$3       # "stereo", "crows", "perplexity"
 PEFT=$4         # "ft", "sft", etc. 
-ITER=$5
 
 if [[ $BIAS_TYPE == "gender" ]];then
     BIAS_CATEG=gender
@@ -104,13 +103,13 @@ elif [[ $DEBIAS == "adv" ]];then
                 --bias_type $BIAS_TYPE \
                 --model $MODEL_CLASS \
                 --model_name_or_path $MODEL_NAME_OR_PATH \
-                --load_path models/$PEFT/$DEBIAS/$BIAS_TYPE/$DATA/only-adv/$PEFT/checkpoint-10000
+                --load_path models/$PEFT/$DEBIAS/$BIAS_TYPE/$DATA/only-adv/$PEFT/
         else
             python bias-bench/experiments/crows_debias.py \
                 --bias_type $BIAS_TYPE \
                 --model $MODEL_CLASS \
                 --model_name_or_path $MODEL_NAME_OR_PATH \
-                --adapter_path models/$PEFT/$DEBIAS/$BIAS_TYPE/$DATA/only-adv/checkpoint-${ITER}000/class \
+                --adapter_path models/$PEFT/$DEBIAS/$BIAS_TYPE/$DATA/only-adv/class \
                 --adapter_config $PEFT
         fi
     elif  [[ $METRIC == "stereo" ]];then

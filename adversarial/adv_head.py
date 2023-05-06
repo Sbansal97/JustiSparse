@@ -58,6 +58,7 @@ class AdversarialClassifierHead(nn.Module):
     def forward(self, hidden, rev_grad):
         if rev_grad:
             hidden = self.rev_grad(hidden)
+        
         pred = self.mlp(hidden)
         return pred
 

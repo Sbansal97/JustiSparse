@@ -94,7 +94,7 @@ class AdvBertForSequenceClassification(BertForSequenceClassification):
             if self.adv_debias:
                 reg_args = self.reg_args
                 attr_logits = self.adv_model(pooled_output, rev_grad=True)
-                attr_probs = torch.nn.Softmax(-1)(attr_logits)
+                # attr_probs = torch.nn.Softmax(-1)(attr_logits)
                 adv_loss = self.adv_model.compute_loss(attr_pred=attr_logits, attr_gt=attr)
                 loss += adv_loss * reg_args.adv_strength
 
